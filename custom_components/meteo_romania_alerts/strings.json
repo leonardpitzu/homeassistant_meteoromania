@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Meteo Romania Alerts",
+        "description": "This integration will create a binary sensor that monitors weather alerts from Meteo Romania (ANM)."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "This integration can only be configured once."
+    }
+  }
+}
