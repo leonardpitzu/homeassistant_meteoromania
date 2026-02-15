@@ -1,14 +1,15 @@
 {
   "domain": "meteo_romania_alerts",
   "name": "Meteo Romania Alerts",
-  "version": "1.0.0",
+  "codeowners": ["@leonardpitzu"],
+  "config_flow": true,
+  "dependencies": [],
   "documentation": "https://www.meteoromania.ro/avertizari/",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/leonardpitzu/meteo_romania_alerts/issues",
   "requirements": [
     "beautifulsoup4"
   ],
-  "dependencies": [],
-  "codeowners": ["@leonardpitzu"],
-  "config_flow": true,
-  "integration_type": "service",
-  "iot_class": "cloud_polling"
+  "version": "1.0.0"
 }
