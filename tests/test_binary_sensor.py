@@ -1,6 +1,6 @@
 """Tests for the Meteo Romania Alerts binary sensor."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -26,10 +26,16 @@ async def _setup(hass, alerts_data):
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.meteo_romania_alerts.api.MeteoRomaniaApiClient.fetch_alerts",
-        new_callable=AsyncMock,
-        return_value=alerts_data,
+    with (
+        patch(
+            "custom_components.meteo_romania_alerts.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.meteo_romania_alerts.api.MeteoRomaniaApiClient.fetch_alerts",
+            new_callable=AsyncMock,
+            return_value=alerts_data,
+        ),
     ):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
