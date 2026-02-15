@@ -39,25 +39,31 @@ async def _setup(hass, alerts_data):
 
 async def test_sensor_on_with_alerts(hass):
     """Binary sensor is ON when alerts are present."""
-    await _setup(hass, MOCK_ALERTS_ACTIVE)
+    entry = await _setup(hass, MOCK_ALERTS_ACTIVE)
 
     state = hass.states.get(ENTITY_ID)
     assert state is not None
     assert state.state == "on"
 
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
 
 async def test_sensor_off_without_alerts(hass):
     """Binary sensor is OFF when there are no alerts."""
-    await _setup(hass, MOCK_ALERTS_NONE)
+    entry = await _setup(hass, MOCK_ALERTS_NONE)
 
     state = hass.states.get(ENTITY_ID)
     assert state is not None
     assert state.state == "off"
 
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
 
 async def test_attributes_include_alert_data(hass):
     """Extra state attributes contain the alert payload."""
-    await _setup(hass, MOCK_ALERTS_ACTIVE)
+    entry = await _setup(hass, MOCK_ALERTS_ACTIVE)
 
     state = hass.states.get(ENTITY_ID)
     assert state is not None
@@ -65,11 +71,17 @@ async def test_attributes_include_alert_data(hass):
     assert state.attributes["alert_count"] == 1
     assert "last_updated" in state.attributes
 
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
 
 async def test_attributes_include_last_updated(hass):
     """Even with no alerts, last_updated is present."""
-    await _setup(hass, MOCK_ALERTS_NONE)
+    entry = await _setup(hass, MOCK_ALERTS_NONE)
 
     state = hass.states.get(ENTITY_ID)
     assert state is not None
     assert "last_updated" in state.attributes
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
