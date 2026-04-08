@@ -6,7 +6,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.meteo_romania_alerts.const import DOMAIN
 
-ENTITY_ID = "binary_sensor.meteo_romania_alert"
+ENTITY_ID = "binary_sensor.meteo_romania_alerts_meteo_romania_alert"
 
 MOCK_ALERTS_ACTIVE = {
     "has_alerts": True,
