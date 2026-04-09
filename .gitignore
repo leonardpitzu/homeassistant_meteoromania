@@ -3,6 +3,15 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# OS junk
+.DS_Store
+
+# Decompiled APK
+decompiled_app/
+
+# Internal debug tools
+tools/
+
 # C extensions
 *.so
 
