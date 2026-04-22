@@ -19,6 +19,7 @@ class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
         session = async_get_clientsession(hass)
         self.api = MeteoRomaniaApiClient(session)
         self.last_updated: str | None = None
+        self.county: str = ""
 
         super().__init__(
             hass,

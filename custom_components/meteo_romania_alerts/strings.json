@@ -3,11 +3,24 @@
     "step": {
       "user": {
         "title": "Meteo Romania Alerts",
-        "description": "This integration will create a binary sensor that monitors weather alerts from Meteo Romania (ANM)."
+        "description": "This integration will create a binary sensor that monitors weather alerts from Meteo Romania (ANM).",
+        "data": {
+          "county": "County (for pixel summary)"
+        }
       }
     },
     "abort": {
       "single_instance_allowed": "This integration can only be configured once."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Meteo Romania Alerts Options",
+        "data": {
+          "county": "County (for pixel summary)"
+        }
+      }
     }
   }
 }

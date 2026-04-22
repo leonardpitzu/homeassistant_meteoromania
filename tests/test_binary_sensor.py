@@ -91,3 +91,147 @@ async def test_attributes_include_last_updated(hass):
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+
+# ---------------------------------------------------------------------------
+# Pixel summary unit tests (no HA context needed)
+# ---------------------------------------------------------------------------
+
+from custom_components.meteo_romania_alerts.binary_sensor import (
+    _build_pixel_summary,
+    _compact_interval,
+    _extract_phenomena_label,
+    _warning_relevant,
+)
+
+MOCK_DATA_MULTI = {
+    "has_alerts": True,
+    "alert_count": 1,
+    "alert 1": {
+        "type": "Avertizare",
+        "interval": "conform textelor",
+        "color_code": "PORTOCALIU",
+        "warning 1": {
+            "color_code": "GALBEN",
+            "interval": "22 aprilie, ora 10:00 – 24 aprilie, ora 10:00",
+            "title": "precipitații mixte la munte, vreme rece",
+            "phenomena": "Zone afectate: Transilvania, în toate regiunile se va resimți vânt puternic.",
+        },
+        "warning 2": {
+            "color_code": "GALBEN",
+            "interval": "23 aprilie, ora 09:00 – 23 aprilie, ora 22:00",
+            "title": "intensificări ale vântului",
+            "phenomena": "Pe parcursul zilei de joi, în Moldova, Transilvania.",
+        },
+        "warning 3": {
+            "color_code": "PORTOCALIU",
+            "interval": "23 aprilie, ora 12:00 – 23 aprilie, ora 20:00",
+            "title": "intensificări puternice ale vântului",
+            "phenomena": "în județele Botoșani, Iași, zona joasă Suceava, rafale de 70...90 km/h.",
+        },
+    },
+}
+
+
+def test_compact_interval_same_day():
+    assert _compact_interval("23 aprilie, ora 09:00 – 23 aprilie, ora 22:00") == "23 apr 09:00-22:00"
+
+
+def test_compact_interval_multi_day():
+    assert _compact_interval("22 aprilie, ora 10:00 – 24 aprilie, ora 10:00") == "22 apr 10:00 - 24 apr 10:00"
+
+
+def test_compact_interval_fallback():
+    assert _compact_interval("conform textelor") == "conform textelor"
+
+
+def test_extract_phenomena_wind():
+    label = _extract_phenomena_label("intensificări ale vântului", "rafale de 50 km/h")
+    assert "Strong wind" in label
+
+
+def test_extract_phenomena_snow():
+    label = _extract_phenomena_label("ninsori abundente", "se va depune zăpadă")
+    assert "Snow" in label
+
+
+def test_extract_phenomena_cold():
+    label = _extract_phenomena_label("vreme rece, brumă", "temperaturi scăzute")
+    assert "Cold" in label or "Frost" in label
+
+
+def test_warning_relevant_direct_county():
+    w = {"color_code": "GALBEN"}
+    assert _warning_relevant(w, "Vânt în județul Brașov", "Brașov") is True
+
+
+def test_warning_relevant_region():
+    w = {"color_code": "GALBEN"}
+    assert _warning_relevant(w, "precipitații în Transilvania", "Brașov") is True
+
+
+def test_warning_relevant_nationwide():
+    w = {"color_code": "GALBEN"}
+    assert _warning_relevant(w, "în toate regiunile", "Constanța") is True
+
+
+def test_warning_not_relevant():
+    w = {"color_code": "GALBEN"}
+    assert _warning_relevant(w, "în județele Botoșani, Iași", "Brașov") is False
+
+
+def test_pixel_summary_brasov():
+    summary = _build_pixel_summary(MOCK_DATA_MULTI, "Brașov")
+    lines = summary.strip().split("\n")
+    # Warnings 1 & 2 should match (Transilvania), warning 3 should not (Botoșani/Iași only)
+    assert len(lines) == 2
+    assert "🟡" in lines[0]
+    assert "🟡" in lines[1]
+
+
+def test_pixel_summary_botosani():
+    summary = _build_pixel_summary(MOCK_DATA_MULTI, "Botoșani")
+    lines = summary.strip().split("\n")
+    # Warning 1 (toate regiunile), warning 2 (Moldova), warning 3 (Botoșani directly)
+    assert len(lines) == 3
+    assert "🟠" in lines[2]
+
+
+def test_pixel_summary_no_match():
+    summary = _build_pixel_summary(MOCK_DATA_MULTI, "Constanța")
+    lines = summary.strip().split("\n")
+    # Warning 1 (toate regiunile) matches, warning 2 and 3 don't mention Dobrogea/Constanța
+    assert len(lines) == 1
+
+
+def test_pixel_summary_no_alerts():
+    data = {"has_alerts": False, "alert_count": 0}
+    summary = _build_pixel_summary(data, "Brașov")
+    assert summary == "No alerts for your area"
+
+
+async def test_pixel_summary_in_attributes(hass):
+    """When county is configured, pixel_summary appears in attributes."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options={"county": "Brașov"})
+    entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.meteo_romania_alerts.coordinator.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.meteo_romania_alerts.api.MeteoRomaniaApiClient.fetch_alerts",
+            new_callable=AsyncMock,
+            return_value=MOCK_DATA_MULTI,
+        ),
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    assert state is not None
+    assert "pixel_summary" in state.attributes
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()

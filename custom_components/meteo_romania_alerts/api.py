@@ -144,12 +144,18 @@ class MeteoRomaniaApiClient:
 #                    title = lines[j].split(":", 1)[1].strip()
 #                    j += 1
 
-                if j < len(lines) and "fenomene" in lines[j].lower():
+                if j < len(lines) and "fenomen" in lines[j].lower():
                     if ":" in lines[j]:
                         title = lines[j].split(":", 1)[1].strip()
                     else:
                         title = lines[j].strip()
                     j += 1
+                    # Content may be on the next line if the colon line was bare
+                    if not title and j < len(lines) \
+                       and "zone " not in lines[j].lower() \
+                       and "interval" not in lines[j].lower():
+                        title = lines[j].strip()
+                        j += 1
 
                 warning["title"] = self._clean_color_prefix(title)
 
@@ -157,7 +163,9 @@ class MeteoRomaniaApiClient:
                 while j < len(lines):
                     if re.match(r"^COD\s+", lines[j], re.IGNORECASE) \
                        or "interval de valabilitate" in lines[j].lower() \
-                       or lines[j].upper().startswith("MESAJ"):
+                       or lines[j].upper().startswith("MESAJ") \
+                       or re.match(r"^(AVERTIZARE|INFORMARE)\s+METEOROLOGIC",
+                                   lines[j], re.IGNORECASE):
                         break
                     desc.append(lines[j])
                     j += 1

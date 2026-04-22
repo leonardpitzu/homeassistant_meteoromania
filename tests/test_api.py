@@ -226,3 +226,62 @@ def test_clean_color_prefix():
     assert client._clean_color_prefix("COD PORTOCALIU test") == "test"
     assert client._clean_color_prefix("no prefix") == "no prefix"
     assert client._clean_color_prefix("  COD GALBEN  spaced  ") == "spaced"
+
+
+# ---------------------------------------------------------------------------
+# Bug-fix regression tests
+# ---------------------------------------------------------------------------
+
+SAMPLE_XML_AVERTIZARE_BOUNDARY = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<avertizari>
+  <avertizare culoare="1" numeTipMesaj="Avertizare" intervalul="conform textelor"
+    mesaj="Interval de valabilitate: 22 apr&lt;br&gt;Fenomene vizate:&lt;br&gt;precipitatii mixte&lt;br&gt;descriere lunga.&lt;br&gt;AVERTIZARE METEOROLOGICA&lt;br&gt;COD GALBEN&lt;br&gt;Interval de valabilitate: 23 apr&lt;br&gt;Fenomene vizate: vant puternic&lt;br&gt;rafale de 50 km/h" />
+</avertizari>"""
+
+
+async def test_avertizare_boundary_not_in_phenomena():
+    """AVERTIZARE METEOROLOGICA must not bleed into the previous warning."""
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_AVERTIZARE_BOUNDARY, SAMPLE_HTML_EMPTY))
+    result = await client.fetch_alerts()
+
+    w1 = result["alert 1"]["warning 1"]
+    assert "AVERTIZARE" not in w1.get("phenomena", "")
+
+    w2 = result["alert 1"]["warning 2"]
+    assert "vant puternic" in w2["title"]
+
+
+SAMPLE_XML_FENOMENE_SPLIT = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<avertizari>
+  <avertizare culoare="0" numeTipMesaj="Informare" intervalul="22 apr"
+    mesaj="Interval de valabilitate: 22 apr&lt;br&gt;Fenomene vizate:&lt;br&gt;ninsori abundente&lt;br&gt;Zone afectate: toata tara&lt;br&gt;text detaliat" />
+</avertizari>"""
+
+
+async def test_fenomene_split_line_title():
+    """When 'Fenomene vizate:' has no content after colon, next line becomes title."""
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_FENOMENE_SPLIT, SAMPLE_HTML_EMPTY))
+    result = await client.fetch_alerts()
+
+    w = result["alert 1"]["warning 1"]
+    assert w["title"] == "ninsori abundente"
+    assert "Zone afectate" in w.get("phenomena", "")
+
+
+SAMPLE_XML_FENOMEN_VARIANT = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<avertizari>
+  <avertizare culoare="0" numeTipMesaj="Test" intervalul="23 apr"
+    mesaj="Interval de valabilitate: 23 apr&lt;br&gt;Fenomen vizate: vant puternic&lt;br&gt;detalii despre vant" />
+</avertizari>"""
+
+
+async def test_fenomen_variant_matched():
+    """'Fenomen vizate' (without final 'e') is handled like 'Fenomene vizate'."""
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_FENOMEN_VARIANT, SAMPLE_HTML_EMPTY))
+    result = await client.fetch_alerts()
+
+    w = result["alert 1"]["warning 1"]
+    assert w["title"] == "vant puternic"
