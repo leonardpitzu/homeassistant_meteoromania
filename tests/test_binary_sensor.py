@@ -191,8 +191,8 @@ def test_local_alerts_brasov():
 
 def test_local_alerts_botosani():
     alerts = _build_local_alerts(MOCK_DATA_MULTI, "Botoșani")
-    # All 3 match but capped at 2, most severe first (PORTOCALIU before GALBEN)
-    assert len(alerts) == 2
+    # All 3 match, most severe first (PORTOCALIU before GALBEN)
+    assert len(alerts) == 3
     assert alerts[0]["color"] == "PORTOCALIU"
     assert alerts[0]["icon"] == "alert_orange"
 

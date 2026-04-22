@@ -123,7 +123,6 @@ def _extract_wind_speed(text: str) -> str:
 
 
 _SEVERITY_ORDER = {"ROSU": 0, "PORTOCALIU": 1, "GALBEN": 2, "NECUNOSCUT": 3}
-_MAX_LOCAL_WARNINGS = 2
 
 _COLOR_ICON = {
     "ROSU": "alert_red",
@@ -137,8 +136,7 @@ def _build_local_alerts(data: dict, county: str) -> list[dict]:
     """Build a list of warning dicts relevant for *county*.
 
     Each dict contains: icon, text, color, r, g, b.
-    At most ``_MAX_LOCAL_WARNINGS`` warnings are kept, prioritised by
-    severity (red > orange > yellow).
+    Warnings are sorted by severity (red > orange > yellow).
     """
     relevant: list[tuple[int, dict]] = []  # (severity, warning)
 
@@ -156,9 +154,8 @@ def _build_local_alerts(data: dict, county: str) -> list[dict]:
             sev = _SEVERITY_ORDER.get(w.get("color_code", ""), 3)
             relevant.append((sev, w))
 
-    # Most severe first, then cap.
+    # Most severe first.
     relevant.sort(key=lambda t: t[0])
-    relevant = relevant[:_MAX_LOCAL_WARNINGS]
 
     results: list[dict] = []
     for _sev, w in relevant:

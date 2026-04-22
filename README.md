@@ -74,7 +74,7 @@ When a county is configured, the sensor gains two extra attributes:
 
 #### `local_alerts` (list)
 
-A list of per-warning dictionaries, capped at the 2 most severe, each containing:
+A list of all per-warning dictionaries relevant to your county, sorted by severity (red → orange → yellow), each containing:
 
 | Key | Description |
 |---|---|
@@ -91,7 +91,7 @@ Example:
 ]
 ```
 
-This is ideal for driving per-warning screens on ESPHome pixel displays (Awtrix-style), where each item maps to one `icon_screen` call.
+This is ideal for driving per-warning screens on ESPHome pixel displays (Awtrix-style), where each item maps to one `icon_screen` call. The companion automation drops yellow alerts when orange or red are present, keeping the display focused on the most important warnings.
 
 #### `local_summary` (string)
 
