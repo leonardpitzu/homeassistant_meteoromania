@@ -8,7 +8,7 @@ A custom [Home Assistant](https://www.home-assistant.io/) integration that monit
 
 ### Binary sensor
 
-A binary sensor entity (`binary_sensor.meteo_romania_alert`) turns **on** whenever ANM has published one or more active weather alerts and **off** when the sky is clear.
+A binary sensor entity (`binary_sensor.meteo_romania_alerts`) turns **on** whenever ANM has published one or more active weather alerts and **off** when the sky is clear.
 
 The entity exposes **detailed attributes** for every active alert:
 
@@ -22,7 +22,8 @@ The entity exposes **detailed attributes** for every active alert:
 | `alert N → warning M → title` | Headline phenomena for each warning inside the alert |
 | `alert N → warning M → phenomena` | Full description of weather phenomena |
 | `alert N → url` | Link to the SVG alert map on meteoromania.ro |
-| `local_summary` | Concise, region-filtered summary (only when a county is configured) |
+| `local_alerts` | List of per-warning dicts with `icon`, `text`, `color`, `r`, `g`, `b` (only when a county is configured) |
+| `local_summary` | Concise, region-filtered summary string (only when a county is configured) |
 | `last_updated` | ISO timestamp of the most recent successful poll |
 
 Example attribute structure:
@@ -67,25 +68,49 @@ Only a single instance of the integration is allowed.
 
 You can change the county at any time via **Settings** → **Devices & Services** → **Meteo Romania Alerts** → **Configure**.
 
-### Local summary
+### Local alerts
 
-When a county is configured, the sensor gains a `local_summary` attribute — a compact, one-line-per-warning text filtered to your region. Only warnings that mention your county, its geographic region, or a nationwide scope are included.
+When a county is configured, the sensor gains two extra attributes:
+
+#### `local_alerts` (list)
+
+A list of per-warning dictionaries, capped at the 2 most severe, each containing:
+
+| Key | Description |
+|---|---|
+| `icon` | `alert_yellow`, `alert_orange`, or `alert_red` |
+| `text` | Compact summary: phenomena + wind speed (if any) + interval |
+| `color` | Severity name (`GALBEN`, `PORTOCALIU`, `ROSU`) |
+| `r`, `g`, `b` | RGB values for the severity colour |
+
+Example:
+```json
+[
+  {"icon": "alert_yellow", "text": "Strong wind, Snow 40-45km/h 22 apr 10:00 - 24 apr 10:00", "color": "GALBEN", "r": 255, "g": 255, "b": 0},
+  {"icon": "alert_orange", "text": "Strong wind 70-90km/h 23 apr 12:00-20:00", "color": "PORTOCALIU", "r": 255, "g": 126, "b": 0}
+]
+```
+
+This is ideal for driving per-warning screens on ESPHome pixel displays (Awtrix-style), where each item maps to one `icon_screen` call.
+
+#### `local_summary` (string)
+
+A compact multi-line string derived from `local_alerts`, one line per warning with a colour emoji prefix:
 
 ```
 🟡 Strong wind, Snow 40-45km/h 22 apr 10:00 - 24 apr 10:00
-🟡 Strong wind 50-70km/h 23 apr 09:00-22:00
 🟠 Strong wind 70-90km/h 23 apr 12:00-20:00
 ```
 
-This is ideal for space-constrained displays (e.g. LED pixel screens, small dashboards) or notification text. Use it in a template:
+Use it in templates:
 
 ```yaml
-{{ state_attr('binary_sensor.meteo_romania_alert', 'local_summary') }}
+{{ state_attr('binary_sensor.meteo_romania_alerts', 'local_summary') }}
 ```
 
 ## Dashboard ideas
 
-- Use a **conditional card** that only appears when `binary_sensor.meteo_romania_alert` is **on** to surface weather warnings without cluttering your dashboard on calm days.
+- Use a **conditional card** that only appears when `binary_sensor.meteo_romania_alerts` is **on** to surface weather warnings without cluttering your dashboard on calm days.
 - Use **Markdown cards** with Jinja templates to render each alert's colour code, phenomena, and validity interval in a styled list.
 - Display the **alert map** (`url` attribute) with a [Picture Entity card](https://www.home-assistant.io/dashboards/picture-entity/) for a visual overview of affected regions.
 - Trigger **automations** (e.g. send a mobile notification) whenever the binary sensor transitions from `off` to `on`.

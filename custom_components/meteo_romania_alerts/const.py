@@ -90,3 +90,10 @@ COLOR_EMOJI = {
     "ROSU": "🔴",
     "NECUNOSCUT": "⚪",
 }
+
+COLOR_RGB = {
+    "GALBEN":     {"r": 255, "g": 200, "b": 0},
+    "PORTOCALIU": {"r": 255, "g": 120, "b": 0},
+    "ROSU":       {"r": 255, "g": 0,   "b": 0},
+    "NECUNOSCUT": {"r": 200, "g": 200, "b": 200},
+}

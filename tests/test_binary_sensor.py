@@ -5,14 +5,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.meteo_romania_alerts.binary_sensor import (
-    _build_local_summary,
+    _build_local_alerts,
+    _format_local_summary,
     _compact_interval,
     _extract_phenomena_label,
     _warning_relevant,
 )
 from custom_components.meteo_romania_alerts.const import DOMAIN
 
-ENTITY_ID = "binary_sensor.meteo_romania_alerts_meteo_romania_alert"
+ENTITY_ID = "binary_sensor.meteo_romania_alerts"
 
 MOCK_ALERTS_ACTIVE = {
     "has_alerts": True,
@@ -179,38 +180,49 @@ def test_warning_not_relevant():
     assert _warning_relevant(w, "în județele Botoșani, Iași", "Brașov") is False
 
 
-def test_local_summary_brasov():
-    summary = _build_local_summary(MOCK_DATA_MULTI, "Brașov")
+def test_local_alerts_brasov():
+    alerts = _build_local_alerts(MOCK_DATA_MULTI, "Brașov")
+    # Warnings 1 & 2 match (Transilvania), warning 3 does not (Botoșani/Iași only)
+    assert len(alerts) == 2
+    assert alerts[0]["color"] == "GALBEN"
+    assert alerts[0]["icon"] == "alert_yellow"
+    assert "r" in alerts[0] and "g" in alerts[0] and "b" in alerts[0]
+
+
+def test_local_alerts_botosani():
+    alerts = _build_local_alerts(MOCK_DATA_MULTI, "Botoșani")
+    # All 3 match but capped at 2, most severe first (PORTOCALIU before GALBEN)
+    assert len(alerts) == 2
+    assert alerts[0]["color"] == "PORTOCALIU"
+    assert alerts[0]["icon"] == "alert_orange"
+
+
+def test_local_alerts_no_match():
+    alerts = _build_local_alerts(MOCK_DATA_MULTI, "Constanța")
+    # Warning 1 (toate regiunile) matches, warning 2 and 3 don't mention Dobrogea/Constanța
+    assert len(alerts) == 1
+
+
+def test_local_alerts_no_alerts():
+    data = {"has_alerts": False, "alert_count": 0}
+    alerts = _build_local_alerts(data, "Brașov")
+    assert alerts == []
+
+
+def test_format_local_summary_from_alerts():
+    alerts = _build_local_alerts(MOCK_DATA_MULTI, "Brașov")
+    summary = _format_local_summary(alerts)
     lines = summary.strip().split("\n")
-    # Warnings 1 & 2 should match (Transilvania), warning 3 should not (Botoșani/Iași only)
     assert len(lines) == 2
     assert "🟡" in lines[0]
-    assert "🟡" in lines[1]
 
 
-def test_local_summary_botosani():
-    summary = _build_local_summary(MOCK_DATA_MULTI, "Botoșani")
-    lines = summary.strip().split("\n")
-    # Warning 1 (toate regiunile), warning 2 (Moldova), warning 3 (Botoșani directly)
-    assert len(lines) == 3
-    assert "🟠" in lines[2]
+def test_format_local_summary_empty():
+    assert _format_local_summary([]) == "No alerts for your area"
 
 
-def test_local_summary_no_match():
-    summary = _build_local_summary(MOCK_DATA_MULTI, "Constanța")
-    lines = summary.strip().split("\n")
-    # Warning 1 (toate regiunile) matches, warning 2 and 3 don't mention Dobrogea/Constanța
-    assert len(lines) == 1
-
-
-def test_local_summary_no_alerts():
-    data = {"has_alerts": False, "alert_count": 0}
-    summary = _build_local_summary(data, "Brașov")
-    assert summary == "No alerts for your area"
-
-
-async def test_local_summary_in_attributes(hass):
-    """When county is configured, local_summary appears in attributes."""
+async def test_local_alerts_in_attributes(hass):
+    """When county is configured, both local_alerts and local_summary appear."""
     entry = MockConfigEntry(domain=DOMAIN, data={}, options={"county": "Brașov"})
     entry.add_to_hass(hass)
 
@@ -230,7 +242,9 @@ async def test_local_summary_in_attributes(hass):
 
     state = hass.states.get(ENTITY_ID)
     assert state is not None
+    assert "local_alerts" in state.attributes
     assert "local_summary" in state.attributes
+    assert isinstance(state.attributes["local_alerts"], list)
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
