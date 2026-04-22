@@ -4,6 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.meteo_romania_alerts.binary_sensor import (
+    _build_local_summary,
+    _compact_interval,
+    _extract_phenomena_label,
+    _warning_relevant,
+)
 from custom_components.meteo_romania_alerts.const import DOMAIN
 
 ENTITY_ID = "binary_sensor.meteo_romania_alerts_meteo_romania_alert"
@@ -94,15 +100,8 @@ async def test_attributes_include_last_updated(hass):
 
 
 # ---------------------------------------------------------------------------
-# Pixel summary unit tests (no HA context needed)
+# Local summary unit tests (no HA context needed)
 # ---------------------------------------------------------------------------
-
-from custom_components.meteo_romania_alerts.binary_sensor import (
-    _build_local_summary,
-    _compact_interval,
-    _extract_phenomena_label,
-    _warning_relevant,
-)
 
 MOCK_DATA_MULTI = {
     "has_alerts": True,
