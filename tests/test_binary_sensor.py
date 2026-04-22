@@ -98,7 +98,7 @@ async def test_attributes_include_last_updated(hass):
 # ---------------------------------------------------------------------------
 
 from custom_components.meteo_romania_alerts.binary_sensor import (
-    _build_pixel_summary,
+    _build_local_summary,
     _compact_interval,
     _extract_phenomena_label,
     _warning_relevant,
@@ -180,8 +180,8 @@ def test_warning_not_relevant():
     assert _warning_relevant(w, "în județele Botoșani, Iași", "Brașov") is False
 
 
-def test_pixel_summary_brasov():
-    summary = _build_pixel_summary(MOCK_DATA_MULTI, "Brașov")
+def test_local_summary_brasov():
+    summary = _build_local_summary(MOCK_DATA_MULTI, "Brașov")
     lines = summary.strip().split("\n")
     # Warnings 1 & 2 should match (Transilvania), warning 3 should not (Botoșani/Iași only)
     assert len(lines) == 2
@@ -189,29 +189,29 @@ def test_pixel_summary_brasov():
     assert "🟡" in lines[1]
 
 
-def test_pixel_summary_botosani():
-    summary = _build_pixel_summary(MOCK_DATA_MULTI, "Botoșani")
+def test_local_summary_botosani():
+    summary = _build_local_summary(MOCK_DATA_MULTI, "Botoșani")
     lines = summary.strip().split("\n")
     # Warning 1 (toate regiunile), warning 2 (Moldova), warning 3 (Botoșani directly)
     assert len(lines) == 3
     assert "🟠" in lines[2]
 
 
-def test_pixel_summary_no_match():
-    summary = _build_pixel_summary(MOCK_DATA_MULTI, "Constanța")
+def test_local_summary_no_match():
+    summary = _build_local_summary(MOCK_DATA_MULTI, "Constanța")
     lines = summary.strip().split("\n")
     # Warning 1 (toate regiunile) matches, warning 2 and 3 don't mention Dobrogea/Constanța
     assert len(lines) == 1
 
 
-def test_pixel_summary_no_alerts():
+def test_local_summary_no_alerts():
     data = {"has_alerts": False, "alert_count": 0}
-    summary = _build_pixel_summary(data, "Brașov")
+    summary = _build_local_summary(data, "Brașov")
     assert summary == "No alerts for your area"
 
 
-async def test_pixel_summary_in_attributes(hass):
-    """When county is configured, pixel_summary appears in attributes."""
+async def test_local_summary_in_attributes(hass):
+    """When county is configured, local_summary appears in attributes."""
     entry = MockConfigEntry(domain=DOMAIN, data={}, options={"county": "Brașov"})
     entry.add_to_hass(hass)
 
@@ -231,7 +231,7 @@ async def test_pixel_summary_in_attributes(hass):
 
     state = hass.states.get(ENTITY_ID)
     assert state is not None
-    assert "pixel_summary" in state.attributes
+    assert "local_summary" in state.attributes
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()

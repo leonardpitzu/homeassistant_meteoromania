@@ -22,6 +22,7 @@ The entity exposes **detailed attributes** for every active alert:
 | `alert N → warning M → title` | Headline phenomena for each warning inside the alert |
 | `alert N → warning M → phenomena` | Full description of weather phenomena |
 | `alert N → url` | Link to the SVG alert map on meteoromania.ro |
+| `local_summary` | Concise, region-filtered summary (only when a county is configured) |
 | `last_updated` | ISO timestamp of the most recent successful poll |
 
 Example attribute structure:
@@ -60,8 +61,27 @@ Data is polled every **60 minutes**.
 1. Go to **Settings** → **Devices & Services** → **Add Integration**.
 2. Search for **Meteo Romania Alerts**.
 3. Confirm — no credentials are needed (ANM data is public).
+4. *(Optional)* Select your **county** to enable the `local_summary` attribute.
 
 Only a single instance of the integration is allowed.
+
+You can change the county at any time via **Settings** → **Devices & Services** → **Meteo Romania Alerts** → **Configure**.
+
+### Local summary
+
+When a county is configured, the sensor gains a `local_summary` attribute — a compact, one-line-per-warning text filtered to your region. Only warnings that mention your county, its geographic region, or a nationwide scope are included.
+
+```
+🟡 Strong wind, Snow 40-45km/h 22 apr 10:00 - 24 apr 10:00
+🟡 Strong wind 50-70km/h 23 apr 09:00-22:00
+🟠 Strong wind 70-90km/h 23 apr 12:00-20:00
+```
+
+This is ideal for space-constrained displays (e.g. LED pixel screens, small dashboards) or notification text. Use it in a template:
+
+```yaml
+{{ state_attr('binary_sensor.meteo_romania_alert', 'local_summary') }}
+```
 
 ## Dashboard ideas
 

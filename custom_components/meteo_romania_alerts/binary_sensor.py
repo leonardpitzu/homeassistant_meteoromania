@@ -46,7 +46,7 @@ class MeteoRomaniaAlertSensor(CoordinatorEntity, BinarySensorEntity):
         }
         county = self.coordinator.county
         if county:
-            attrs["pixel_summary"] = _build_pixel_summary(self.coordinator.data, county)
+            attrs["local_summary"] = _build_local_summary(self.coordinator.data, county)
         return attrs
 
     @property
@@ -60,7 +60,7 @@ class MeteoRomaniaAlertSensor(CoordinatorEntity, BinarySensorEntity):
         )
 
 
-# ── Pixel summary helpers ─────────────────────────────────────────────
+# ── Local summary helpers ─────────────────────────────────────────────
 
 
 def _warning_relevant(warning: dict, full_text: str, county: str) -> bool:
@@ -93,7 +93,7 @@ def _extract_phenomena_label(title: str, phenomena: str) -> str:
 
 
 def _compact_interval(interval: str) -> str:
-    """Shorten '22 aprilie, ora 10:00 – 24 aprilie, ora 10:00' for pixel."""
+    """Shorten '22 aprilie, ora 10:00 – 24 aprilie, ora 10:00' to compact form."""
     m = re.match(
         r"(\d+)\s+(\w+),?\s+ora\s+(\d+:\d+)\s*[–\-]\s*(\d+)\s+(\w+),?\s+ora\s+(\d+:\d+)",
         interval,
@@ -118,7 +118,7 @@ def _extract_wind_speed(text: str) -> str:
     return ""
 
 
-def _build_pixel_summary(data: dict, county: str) -> str:
+def _build_local_summary(data: dict, county: str) -> str:
     """Build a short multi-line summary of warnings relevant for *county*."""
     lines: list[str] = []
 

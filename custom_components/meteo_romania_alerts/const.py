@@ -59,7 +59,7 @@ NATIONWIDE_PATTERNS = [
     "întregul teritoriu",
 ]
 
-# Map Romanian weather phenomena to concise English labels for pixel display.
+# Map Romanian weather phenomena to concise English labels for local summary.
 PHENOMENA_MAP = [
     (r"intensificări\s+(puternice\s+)?ale\s+vântului|vânt\s+puternic|vânt\b", "Strong wind"),
     (r"viscol", "Blizzard"),
