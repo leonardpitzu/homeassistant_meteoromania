@@ -84,6 +84,13 @@ MONTH_SHORT = {
     "octombrie": "oct", "noiembrie": "nov", "decembrie": "dec",
 }
 
+MONTH_NUM = {
+    "ianuarie": "1", "februarie": "2", "martie": "3",
+    "aprilie": "4", "mai": "5", "iunie": "6",
+    "iulie": "7", "august": "8", "septembrie": "9",
+    "octombrie": "10", "noiembrie": "11", "decembrie": "12",
+}
+
 COLOR_EMOJI = {
     "GALBEN": "🟡",
     "PORTOCALIU": "🟠",

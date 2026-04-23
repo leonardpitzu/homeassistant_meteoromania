@@ -134,11 +134,11 @@ MOCK_DATA_MULTI = {
 
 
 def test_compact_interval_same_day():
-    assert _compact_interval("23 aprilie, ora 09:00 – 23 aprilie, ora 22:00") == "23 apr 09:00-22:00"
+    assert _compact_interval("23 aprilie, ora 09:00 – 23 aprilie, ora 22:00") == "23/4 9h-22h"
 
 
 def test_compact_interval_multi_day():
-    assert _compact_interval("22 aprilie, ora 10:00 – 24 aprilie, ora 10:00") == "22 apr 10:00 - 24 apr 10:00"
+    assert _compact_interval("22 aprilie, ora 10:00 – 24 aprilie, ora 10:00") == "22/4 10h-24/4 10h"
 
 
 def test_compact_interval_fallback():

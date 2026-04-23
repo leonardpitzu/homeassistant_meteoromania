@@ -10,7 +10,7 @@ from .const import (
     COUNTY_KEYWORDS,
     NATIONWIDE_PATTERNS,
     PHENOMENA_MAP,
-    MONTH_SHORT,
+    MONTH_NUM,
     COLOR_EMOJI,
     COLOR_RGB,
 )
@@ -96,21 +96,28 @@ def _extract_phenomena_label(title: str, phenomena: str) -> str:
     return ", ".join(labels[:2]) if labels else title[:30]
 
 
+def _short_time(t: str) -> str:
+    """'10:00' -> '10h', '09:00' -> '9h', '10:30' -> '10:30'."""
+    if t.endswith(":00"):
+        return f"{int(t.split(':')[0])}h"
+    return t
+
+
 def _compact_interval(interval: str) -> str:
-    """Shorten '22 aprilie, ora 10:00 – 24 aprilie, ora 10:00' to compact form."""
+    """Shorten '22 aprilie, ora 10:00 – 24 aprilie, ora 10:00' to '22/4 10h-24/4 10h'."""
     m = re.match(
         r"(\d+)\s+(\w+),?\s+ora\s+(\d+:\d+)\s*[–\-]\s*(\d+)\s+(\w+),?\s+ora\s+(\d+:\d+)",
         interval,
     )
     if m:
         d1, m1, t1, d2, m2, t2 = m.groups()
-        ms1 = MONTH_SHORT.get(m1.lower(), m1[:3])
-        ms2 = MONTH_SHORT.get(m2.lower(), m2[:3])
-        if m1.lower() == m2.lower():
-            if d1 == d2:
-                return f"{d1} {ms1} {t1}-{t2}"
-            return f"{d1} {ms1} {t1} - {d2} {ms1} {t2}"
-        return f"{d1} {ms1} {t1} - {d2} {ms2} {t2}"
+        mn1 = MONTH_NUM.get(m1.lower(), m1[:2])
+        mn2 = MONTH_NUM.get(m2.lower(), m2[:2])
+        st1 = _short_time(t1)
+        st2 = _short_time(t2)
+        if m1.lower() == m2.lower() and d1 == d2:
+            return f"{d1}/{mn1} {st1}-{st2}"
+        return f"{d1}/{mn1} {st1}-{d2}/{mn2} {st2}"
     return interval[:30]
 
 
