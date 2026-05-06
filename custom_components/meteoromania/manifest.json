@@ -1,13 +1,13 @@
 {
-  "domain": "meteo_romania_alerts",
-  "name": "Meteo Romania Alerts",
+  "domain": "meteoromania",
+  "name": "MeteoRomania",
   "codeowners": ["@leonardpitzu"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://www.meteoromania.ro/avertizari/",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/leonardpitzu/meteo_romania_alerts/issues",
+  "issue_tracker": "https://github.com/leonardpitzu/homeassistant_meteoromania/issues",
   "requirements": [
     "beautifulsoup4"
   ],

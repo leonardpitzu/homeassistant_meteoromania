@@ -1,10 +1,10 @@
-"""Tests for the Meteo Romania Alerts integration setup / teardown."""
+"""Tests for the MeteoRomania integration setup / teardown."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.meteo_romania_alerts.const import DOMAIN
+from custom_components.meteoromania.const import DOMAIN
 
 MOCK_DATA = {"has_alerts": False, "alert_count": 0}
 
@@ -13,11 +13,11 @@ def _patch_api():
     """Patch the API client and session so no real HTTP calls are made."""
     return (
         patch(
-            "custom_components.meteo_romania_alerts.coordinator.async_get_clientsession",
+            "custom_components.meteoromania.coordinator.async_get_clientsession",
             return_value=MagicMock(),
         ),
         patch(
-            "custom_components.meteo_romania_alerts.api.MeteoRomaniaApiClient.fetch_alerts",
+            "custom_components.meteoromania.api.MeteoRomaniaApiClient.fetch_alerts",
             new_callable=AsyncMock,
             return_value=MOCK_DATA,
         ),
@@ -61,11 +61,11 @@ async def test_setup_entry_api_failure(hass):
 
     with (
         patch(
-            "custom_components.meteo_romania_alerts.coordinator.async_get_clientsession",
+            "custom_components.meteoromania.coordinator.async_get_clientsession",
             return_value=MagicMock(),
         ),
         patch(
-            "custom_components.meteo_romania_alerts.api.MeteoRomaniaApiClient.fetch_alerts",
+            "custom_components.meteoromania.api.MeteoRomaniaApiClient.fetch_alerts",
             new_callable=AsyncMock,
             side_effect=Exception("timeout"),
         ),

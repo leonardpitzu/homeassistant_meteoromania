@@ -1,9 +1,9 @@
-"""Tests for the Meteo Romania API client."""
+"""Tests for the MeteoRomania API client."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from custom_components.meteo_romania_alerts.api import MeteoRomaniaApiClient
+from custom_components.meteoromania.api import MeteoRomaniaApiClient
 
 
 # ---------------------------------------------------------------------------

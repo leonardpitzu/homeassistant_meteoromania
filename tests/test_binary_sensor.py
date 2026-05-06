@@ -1,19 +1,19 @@
-"""Tests for the Meteo Romania Alerts binary sensor."""
+"""Tests for the MeteoRomania binary sensor."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.meteo_romania_alerts.binary_sensor import (
+from custom_components.meteoromania.binary_sensor import (
     _build_local_alerts,
     _format_local_summary,
     _compact_interval,
     _extract_phenomena_label,
     _warning_relevant,
 )
-from custom_components.meteo_romania_alerts.const import DOMAIN
+from custom_components.meteoromania.const import DOMAIN
 
-ENTITY_ID = "binary_sensor.meteo_romania_alerts"
+ENTITY_ID = "binary_sensor.meteoromania"
 
 MOCK_ALERTS_ACTIVE = {
     "has_alerts": True,
@@ -35,11 +35,11 @@ async def _setup(hass, alerts_data):
 
     with (
         patch(
-            "custom_components.meteo_romania_alerts.coordinator.async_get_clientsession",
+            "custom_components.meteoromania.coordinator.async_get_clientsession",
             return_value=MagicMock(),
         ),
         patch(
-            "custom_components.meteo_romania_alerts.api.MeteoRomaniaApiClient.fetch_alerts",
+            "custom_components.meteoromania.api.MeteoRomaniaApiClient.fetch_alerts",
             new_callable=AsyncMock,
             return_value=alerts_data,
         ),
@@ -228,11 +228,11 @@ async def test_local_alerts_in_attributes(hass):
 
     with (
         patch(
-            "custom_components.meteo_romania_alerts.coordinator.async_get_clientsession",
+            "custom_components.meteoromania.coordinator.async_get_clientsession",
             return_value=MagicMock(),
         ),
         patch(
-            "custom_components.meteo_romania_alerts.api.MeteoRomaniaApiClient.fetch_alerts",
+            "custom_components.meteoromania.api.MeteoRomaniaApiClient.fetch_alerts",
             new_callable=AsyncMock,
             return_value=MOCK_DATA_MULTI,
         ),

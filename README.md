@@ -1,4 +1,4 @@
-# Meteo Romania Alerts for Home Assistant
+# MeteoRomania for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
@@ -8,7 +8,7 @@ A custom [Home Assistant](https://www.home-assistant.io/) integration that monit
 
 ### Binary sensor
 
-A binary sensor entity (`binary_sensor.meteo_romania_alerts`) turns **on** whenever ANM has published one or more active weather alerts and **off** when the sky is clear.
+A binary sensor entity (`binary_sensor.meteoromania`) turns **on** whenever ANM has published one or more active weather alerts and **off** when the sky is clear.
 
 The entity exposes **detailed attributes** for every active alert:
 
@@ -48,25 +48,25 @@ Data is polled every **60 minutes**.
 
 1. Open HACS in your Home Assistant instance.
 2. Go to **Integrations** → **⋮** → **Custom repositories**.
-3. Add `https://github.com/leonardpitzu/meteo_romania_alerts` as an **Integration**.
-4. Search for **Meteo Romania Alerts** and install it.
+3. Add `https://github.com/leonardpitzu/homeassistant_meteoromania` as an **Integration**.
+4. Search for **MeteoRomania** and install it.
 5. Restart Home Assistant.
 
 ### Manual
 
-1. Copy the `custom_components/meteo_romania_alerts` folder into your Home Assistant `config/custom_components/` directory.
+1. Copy the `custom_components/meteoromania` folder into your Home Assistant `config/custom_components/` directory.
 2. Restart Home Assistant.
 
 ## Configuration
 
 1. Go to **Settings** → **Devices & Services** → **Add Integration**.
-2. Search for **Meteo Romania Alerts**.
+2. Search for **MeteoRomania**.
 3. Confirm — no credentials are needed (ANM data is public).
 4. *(Optional)* Select your **county** to enable the `local_summary` attribute.
 
 Only a single instance of the integration is allowed.
 
-You can change the county at any time via **Settings** → **Devices & Services** → **Meteo Romania Alerts** → **Configure**.
+You can change the county at any time via **Settings** → **Devices & Services** → **MeteoRomania** → **Configure**.
 
 ### Local alerts
 
@@ -105,12 +105,12 @@ A compact multi-line string derived from `local_alerts`, one line per warning wi
 Use it in templates:
 
 ```yaml
-{{ state_attr('binary_sensor.meteo_romania_alerts', 'local_summary') }}
+{{ state_attr('binary_sensor.meteoromania', 'local_summary') }}
 ```
 
 ## Dashboard ideas
 
-- Use a **conditional card** that only appears when `binary_sensor.meteo_romania_alerts` is **on** to surface weather warnings without cluttering your dashboard on calm days.
+- Use a **conditional card** that only appears when `binary_sensor.meteoromania` is **on** to surface weather warnings without cluttering your dashboard on calm days.
 - Use **Markdown cards** with Jinja templates to render each alert's colour code, phenomena, and validity interval in a styled list.
 - Display the **alert map** (`url` attribute) with a [Picture Entity card](https://www.home-assistant.io/dashboards/picture-entity/) for a visual overview of affected regions.
 - Trigger **automations** (e.g. send a mobile notification) whenever the binary sensor transitions from `off` to `on`.

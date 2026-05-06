@@ -33,6 +33,6 @@ class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             data = await self.api.fetch_alerts()
         except Exception as err:
-            raise UpdateFailed(f"Error fetching Meteo Romania alerts: {err}") from err
+            raise UpdateFailed(f"Error fetching MeteoRomania data: {err}") from err
         self.last_updated = utcnow().isoformat()
         return data

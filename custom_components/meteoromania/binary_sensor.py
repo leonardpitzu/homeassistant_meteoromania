@@ -21,10 +21,10 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([MeteoRomaniaAlertSensor(coordinator, entry.entry_id)], update_before_add=True)
+    async_add_entities([MeteoRomaniaSensor(coordinator, entry.entry_id)], update_before_add=True)
 
 
-class MeteoRomaniaAlertSensor(CoordinatorEntity, BinarySensorEntity):
+class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
     _attr_has_entity_name = True
     _attr_name = None
     _attr_icon = "mdi:alert"
@@ -57,7 +57,7 @@ class MeteoRomaniaAlertSensor(CoordinatorEntity, BinarySensorEntity):
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry_id)},
-            name="Meteo Romania Alerts",
+            name="MeteoRomania",
             manufacturer="Administrația Națională de Meteorologie",
             entry_type=DeviceEntryType.SERVICE,
             configuration_url="https://www.meteoromania.ro/"

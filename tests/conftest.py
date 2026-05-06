@@ -1,4 +1,4 @@
-"""Shared fixtures for Meteo Romania Alerts tests."""
+"""Shared fixtures for MeteoRomania tests."""
 
 import pytest
 

@@ -18,7 +18,7 @@ class MeteoRomaniaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             return self.async_create_entry(
-                title="Meteo Romania Alerts",
+                title="MeteoRomania",
                 data={},
                 options={CONF_COUNTY: user_input.get(CONF_COUNTY, "")},
             )

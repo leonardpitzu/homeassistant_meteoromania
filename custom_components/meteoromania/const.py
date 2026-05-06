@@ -1,4 +1,4 @@
-DOMAIN = 'meteo_romania_alerts'
+DOMAIN = 'meteoromania'
 CONF_COUNTY = 'county'
 
 # Romanian counties mapped to region keywords used in ANM weather warnings.

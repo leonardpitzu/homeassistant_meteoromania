@@ -1,7 +1,7 @@
 [project]
-name = "meteo-romania-alerts"
+name = "homeassistant-meteoromania"
 version = "1.0.0"
-description = "Home Assistant custom integration for Meteo Romania weather alerts"
+description = "Home Assistant custom integration for MeteoRomania weather alerts"
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]

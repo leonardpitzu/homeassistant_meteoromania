@@ -6,7 +6,7 @@ from .coordinator import MeteoRomaniaDataUpdateCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Meteo Romania Alerts from a config entry."""
+    """Set up MeteoRomania from a config entry."""
     coordinator = MeteoRomaniaDataUpdateCoordinator(hass)
     coordinator.county = entry.options.get(CONF_COUNTY, "")
     await coordinator.async_config_entry_first_refresh()
@@ -27,7 +27,7 @@ async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload Meteo Romania Alerts entry."""
+    """Unload MeteoRomania entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, ["binary_sensor"])
     
     if unload_ok:

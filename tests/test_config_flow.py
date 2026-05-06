@@ -1,4 +1,4 @@
-"""Tests for the Meteo Romania Alerts config flow."""
+"""Tests for the MeteoRomania config flow."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -6,7 +6,7 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.meteo_romania_alerts.const import DOMAIN
+from custom_components.meteoromania.const import DOMAIN
 
 
 async def test_user_step_shows_form(hass):
@@ -27,11 +27,11 @@ async def test_user_step_creates_entry(hass):
 
     with (
         patch(
-            "custom_components.meteo_romania_alerts.coordinator.async_get_clientsession",
+            "custom_components.meteoromania.coordinator.async_get_clientsession",
             return_value=MagicMock(),
         ),
         patch(
-            "custom_components.meteo_romania_alerts.api.MeteoRomaniaApiClient.fetch_alerts",
+            "custom_components.meteoromania.api.MeteoRomaniaApiClient.fetch_alerts",
             new_callable=AsyncMock,
             return_value={"has_alerts": False, "alert_count": 0},
         ),
@@ -41,7 +41,7 @@ async def test_user_step_creates_entry(hass):
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Meteo Romania Alerts"
+    assert result["title"] == "MeteoRomania"
     assert result["data"] == {}
 
 
