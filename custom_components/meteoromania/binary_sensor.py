@@ -51,9 +51,6 @@ class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
             alerts_list = _build_local_alerts(self.coordinator.data, county)
             attrs["local_alerts"] = alerts_list
             attrs["local_summary"] = _format_local_summary(alerts_list)
-            attrs["local_summary_ascii"] = strip_diacritics(
-                _format_local_summary(alerts_list)
-            )
         return attrs
 
     @property
@@ -109,11 +106,13 @@ def _extract_phenomena_label(title: str, phenomena: str) -> str:
         if re.search(pattern, combined, re.IGNORECASE):
             if label not in labels:
                 labels.append(label)
-    return ", ".join(labels[:2]) if labels else title[:30]
+    return ", ".join(labels[:2]) if labels else strip_diacritics(title[:30])
 
 
 def _short_time(t: str) -> str:
-    """'10:00' -> '10h', '09:00' -> '9h', '10:30' -> '10:30'."""
+    """'10:00' -> '10h', '09:00' -> '9h', '10:30' -> '10:30', '22' -> '22h'."""
+    if ":" not in t:
+        return f"{int(t)}h"
     if t.endswith(":00"):
         return f"{int(t.split(':')[0])}h"
     return t
@@ -122,7 +121,7 @@ def _short_time(t: str) -> str:
 def _compact_interval(interval: str) -> str:
     """Shorten '22 aprilie, ora 10:00 – 24 aprilie, ora 10:00' to '22/4 10h-24/4 10h'."""
     m = re.match(
-        r"(\d+)\s+(\w+),?\s+ora\s+(\d+:\d+)\s*[–\-]\s*(\d+)\s+(\w+),?\s+ora\s+(\d+:\d+)",
+        r"(\d+)\s+(\w+),?\s+ora\s+(\d+(?::\d+)?)\s*[–\-]\s*(\d+)\s+(\w+),?\s+ora\s+(\d+(?::\d+)?)",
         interval,
     )
     if m:
@@ -132,9 +131,9 @@ def _compact_interval(interval: str) -> str:
         st1 = _short_time(t1)
         st2 = _short_time(t2)
         if m1.lower() == m2.lower() and d1 == d2:
-            return f"{d1}/{mn1} {st1}-{st2}"
-        return f"{d1}/{mn1} {st1}-{d2}/{mn2} {st2}"
-    return interval[:30]
+            return f"{int(d1)}/{mn1} {st1}-{st2}"
+        return f"{int(d1)}/{mn1} {st1}-{int(d2)}/{mn2} {st2}"
+    return strip_diacritics(interval[:30])
 
 
 def _extract_wind_speed(text: str) -> str:
@@ -192,9 +191,10 @@ def _build_local_alerts(data: dict, county: str) -> list[dict]:
         interval = _compact_interval(w.get("interval", ""))
 
         rgb = COLOR_RGB.get(color_code, COLOR_RGB["NECUNOSCUT"])
+        text = f"{label}{speed} {interval}"
         results.append({
             "icon": _COLOR_ICON.get(color_code, "alert_yellow"),
-            "text": f"{label}{speed} {interval}",
+            "text": text,
             "color": color_code,
             **rgb,
         })

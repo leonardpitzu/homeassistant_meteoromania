@@ -65,7 +65,7 @@ PHENOMENA_MAP = [
     (r"viscol", "Blizzard"),
     (r"ninsori|ninge|zăpadă|ninsoare", "Snow"),
     (r"precipitații\s+mixte", "Mixed precip."),
-    (r"ploi\s+torențiale|precipitații\s+abundente", "Heavy rain"),
+    (r"ploi\s+torențiale|precipitații\s+abundente|cantități\s+de\s+apă", "Heavy rain"),
     (r"ploaie|ploi|precipitații", "Rain"),
     (r"furtuni|furtună|vijelii|vijelie", "Storms"),
     (r"descărcări\s+electrice", "Thunderstorms"),

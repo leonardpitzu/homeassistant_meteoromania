@@ -142,6 +142,14 @@ def test_compact_interval_multi_day():
     assert _compact_interval("22 aprilie, ora 10:00 – 24 aprilie, ora 10:00") == "22/4 10h-24/4 10h"
 
 
+def test_compact_interval_bare_hours():
+    assert _compact_interval("09 mai, ora 22 – 10 mai, ora 10") == "9/5 22h-10/5 10h"
+
+
+def test_compact_interval_bare_hours_same_day():
+    assert _compact_interval("09 mai, ora 10 – 09 mai, ora 22") == "9/5 10h-22h"
+
+
 def test_compact_interval_fallback():
     assert _compact_interval("conform textelor") == "conform textelor"
 
@@ -149,6 +157,11 @@ def test_compact_interval_fallback():
 def test_extract_phenomena_wind():
     label = _extract_phenomena_label("intensificări ale vântului", "rafale de 50 km/h")
     assert "Strong wind" in label
+
+
+def test_extract_phenomena_heavy_rain():
+    label = _extract_phenomena_label("cantități de apă însemnate", "averse ce vor acumula")
+    assert "Heavy rain" in label
 
 
 def test_extract_phenomena_snow():
@@ -255,7 +268,6 @@ async def test_local_alerts_in_attributes(hass):
     assert state is not None
     assert "local_alerts" in state.attributes
     assert "local_summary" in state.attributes
-    assert "local_summary_ascii" in state.attributes
     assert isinstance(state.attributes["local_alerts"], list)
 
     await hass.config_entries.async_unload(entry.entry_id)
