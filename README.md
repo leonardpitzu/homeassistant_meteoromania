@@ -24,6 +24,7 @@ The entity exposes **detailed attributes** for every active alert:
 | `alert N → url` | Link to the SVG alert map on meteoromania.ro |
 | `local_alerts` | List of per-warning dicts with `icon`, `text`, `color`, `r`, `g`, `b` (only when a county is configured) |
 | `local_summary` | Concise, region-filtered summary string (only when a county is configured) |
+| `local_summary_ascii` | Same as `local_summary` with Romanian diacritics replaced by ASCII equivalents (only when a county is configured) |
 | `last_updated` | ISO timestamp of the most recent successful poll |
 
 Example attribute structure:
@@ -106,6 +107,14 @@ Use it in templates:
 
 ```yaml
 {{ state_attr('binary_sensor.meteoromania', 'local_summary') }}
+```
+
+#### `local_summary_ascii` (string)
+
+Identical to `local_summary` but with Romanian diacritics (ă, â, î, ș, ț) replaced by their ASCII equivalents (a, a, i, s, t). Useful for ESPHome pixel displays whose bitmap fonts lack diacritical glyphs:
+
+```yaml
+{{ state_attr('binary_sensor.meteoromania', 'local_summary_ascii') }}
 ```
 
 ## Dashboard ideas

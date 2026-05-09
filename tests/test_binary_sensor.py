@@ -10,6 +10,7 @@ from custom_components.meteoromania.binary_sensor import (
     _compact_interval,
     _extract_phenomena_label,
     _warning_relevant,
+    strip_diacritics,
 )
 from custom_components.meteoromania.const import DOMAIN
 
@@ -221,6 +222,16 @@ def test_format_local_summary_empty():
     assert _format_local_summary([]) == "No alerts for your area"
 
 
+def test_strip_diacritics():
+    assert strip_diacritics("ăâîșț") == "aaist"
+    assert strip_diacritics("ĂÂÎȘȚ") == "AAIST"
+    # Legacy cedilla variants (ş ţ)
+    assert strip_diacritics("şţ") == "st"
+    assert strip_diacritics("Brașov") == "Brasov"
+    assert strip_diacritics("Hello world") == "Hello world"
+    assert strip_diacritics("") == ""
+
+
 async def test_local_alerts_in_attributes(hass):
     """When county is configured, both local_alerts and local_summary appear."""
     entry = MockConfigEntry(domain=DOMAIN, data={}, options={"county": "Brașov"})
@@ -244,6 +255,7 @@ async def test_local_alerts_in_attributes(hass):
     assert state is not None
     assert "local_alerts" in state.attributes
     assert "local_summary" in state.attributes
+    assert "local_summary_ascii" in state.attributes
     assert isinstance(state.attributes["local_alerts"], list)
 
     await hass.config_entries.async_unload(entry.entry_id)

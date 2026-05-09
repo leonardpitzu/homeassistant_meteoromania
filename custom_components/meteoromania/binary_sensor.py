@@ -51,6 +51,9 @@ class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
             alerts_list = _build_local_alerts(self.coordinator.data, county)
             attrs["local_alerts"] = alerts_list
             attrs["local_summary"] = _format_local_summary(alerts_list)
+            attrs["local_summary_ascii"] = strip_diacritics(
+                _format_local_summary(alerts_list)
+            )
         return attrs
 
     @property
@@ -62,6 +65,19 @@ class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
             entry_type=DeviceEntryType.SERVICE,
             configuration_url="https://www.meteoromania.ro/"
         )
+
+
+# ── Diacritics transliteration ─────────────────────────────────────────
+
+_RO_DIACRITICS = str.maketrans(
+    "ăâîșțĂÂÎȘȚşţŞŢ",
+    "aaistAAISTstST",
+)
+
+
+def strip_diacritics(text: str) -> str:
+    """Replace Romanian diacritical characters with ASCII equivalents."""
+    return text.translate(_RO_DIACRITICS)
 
 
 # ── Local summary helpers ─────────────────────────────────────────────
