@@ -200,6 +200,29 @@ async def test_maps_keyed_by_map_order_not_block_position():
     assert "harta.svg.php?id=200" in result["alert 1"]["warning 2"]["url"]
 
 
+SAMPLE_XML_LONE_INFORMARE = (
+    """\
+<?xml version="1.0" encoding="UTF-8"?>
+<avertizari>
+  <avertizare culoare="0" numeTipMesaj="x" intervalul="x"
+    mesaj="INFORMARE METEOROLOGICĂ&lt;br&gt;Interval de valabilitate: 1 mai&lt;br&gt;Fenomene vizate: vreme calduroasa&lt;br&gt;detalii" />
+</avertizari>"""
+).encode("utf-8")
+
+
+async def test_map_attaches_to_lone_alert_stub():
+    """An alert with no warnings still receives its own map."""
+    client = MeteoRomaniaApiClient(
+        _make_session(SAMPLE_XML_LONE_INFORMARE, SAMPLE_HTML_ONE_MAP)
+    )
+    result = await client.fetch_alerts()
+
+    alert = result["alert 1"]
+    assert alert["type"] == "INFORMARE METEOROLOGICĂ"
+    assert not any(key.startswith("warning ") for key in alert)
+    assert "harta.svg.php?id=123" in alert["url"]
+
+
 
 async def test_network_error():
     """Network failures propagate as exceptions."""

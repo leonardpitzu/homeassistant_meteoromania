@@ -235,12 +235,19 @@ class MeteoRomaniaApiClient:
         return alerts
 
     def _map_images(self, alerts: dict, html_content: bytes) -> None:
-        """Attach map image URLs to the warnings, in document order.
+        """Attach map image URLs to the alerts/warnings, in document order.
 
-        Each ATENȚIONARE (warning) has one map and the page lists them in the
-        same order the warnings were parsed. Map-less ``alerta_meteo_produse``
-        blocks (footer/promo) are skipped so they can't shift the alignment.
-        The informare alert itself has no map.
+        The page lists one ``alerta_meteo_produse`` block per product; only
+        some carry a ``harta.svg.php`` map (others are map-less nowcasting or
+        footer blocks). Following the original parser, the maps are collected
+        in document order and the map-less blocks are skipped so a stray one
+        can never shift every URL onto the wrong target.
+
+        An alert is just a stub that introduces what follows, so its warnings
+        are the real map targets; the maps line up with them in order. A lone
+        alert with no warnings can still carry its own map. Either side may be
+        shorter than the other (a block can come with or without a map), so the
+        zip is non-strict.
         """
         soup = BeautifulSoup(html_content, "html.parser")
         urls = []
@@ -253,14 +260,14 @@ class MeteoRomaniaApiClient:
                 url = BASE_URL + url
             urls.append(url)
 
-        warnings = [
-            alert[key]
-            for alert in alerts.values()
-            for key in alert
-            if key.startswith("warning ")
-        ]
-        for warning, url in zip(warnings, urls, strict=False):
-            warning["url"] = url
+        targets = []
+        for alert in alerts.values():
+            warnings = [alert[key] for key in alert if key.startswith("warning ")]
+            targets.extend(warnings if warnings else [alert])
+
+        for target, url in zip(targets, urls, strict=False):
+            target["url"] = url
+
 
     def _extract_lines(self, html):
         soup = BeautifulSoup(html, "html.parser")
