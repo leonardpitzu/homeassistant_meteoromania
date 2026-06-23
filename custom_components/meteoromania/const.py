@@ -1,5 +1,9 @@
+from homeassistant.const import Platform
+
 DOMAIN = 'meteoromania'
 CONF_COUNTY = 'county'
+
+PLATFORMS = [Platform.BINARY_SENSOR]
 
 # Romanian counties mapped to region keywords used in ANM weather warnings.
 # Each entry: county name -> list of terms that, when found in a warning's text,
@@ -76,13 +80,6 @@ PHENOMENA_MAP = [
     (r"ceață", "Fog"),
     (r"polei", "Ice"),
 ]
-
-MONTH_SHORT = {
-    "ianuarie": "ian", "februarie": "feb", "martie": "mar",
-    "aprilie": "apr", "mai": "mai", "iunie": "iun",
-    "iulie": "iul", "august": "aug", "septembrie": "sep",
-    "octombrie": "oct", "noiembrie": "nov", "decembrie": "dec",
-}
 
 MONTH_NUM = {
     "ianuarie": "1", "februarie": "2", "martie": "3",

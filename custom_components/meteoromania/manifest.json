@@ -9,7 +9,8 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/leonardpitzu/homeassistant_meteoromania/issues",
   "requirements": [
-    "beautifulsoup4"
+    "beautifulsoup4",
+    "defusedxml"
   ],
   "version": "1.0.0"
 }

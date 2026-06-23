@@ -3,7 +3,10 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from custom_components.meteoromania.api import MeteoRomaniaApiClient
+from custom_components.meteoromania.api import (
+    MeteoRomaniaApiClient,
+    MeteoRomaniaApiError,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +172,30 @@ async def test_no_html_map():
     assert "url" not in result["alert 1"]
 
 
+SAMPLE_HTML_LEADING_MAPLESS = b"""\
+<html><body>
+<div class="alerta_meteo_produse"><p>intro, no map</p></div>
+<div class="alerta_meteo_produse">
+  <img src="/avertizari/harta.svg.php?id=100" />
+</div>
+<div class="alerta_meteo_produse">
+  <img src="/avertizari/harta.svg.php?id=200" />
+</div>
+</body></html>"""
+
+
+async def test_maps_keyed_by_map_order_not_block_position():
+    """A leading map-less block must not shift every map onto the wrong alert."""
+    client = MeteoRomaniaApiClient(
+        _make_session(SAMPLE_XML_TWO_ALERTS, SAMPLE_HTML_LEADING_MAPLESS)
+    )
+    result = await client.fetch_alerts()
+
+    assert "harta.svg.php?id=100" in result["alert 1"]["url"]
+    assert "harta.svg.php?id=200" in result["alert 2"]["url"]
+
+
+
 async def test_network_error():
     """Network failures propagate as exceptions."""
     session = MagicMock()
@@ -183,6 +210,45 @@ async def test_network_error():
     client = MeteoRomaniaApiClient(session)
 
     with pytest.raises(Exception, match="Connection refused"):
+        await client.fetch_alerts()
+
+
+def _make_session_partial(xml_bytes: bytes, html_exc: Exception):
+    """Session where the XML request succeeds but the HTML request fails."""
+    session = MagicMock()
+
+    def _get(url, **kwargs):
+        ctx = MagicMock()
+        if "xml" in url.lower():
+            resp = AsyncMock()
+            resp.raise_for_status = MagicMock()
+            resp.read = AsyncMock(return_value=xml_bytes)
+            ctx.__aenter__ = AsyncMock(return_value=resp)
+        else:
+            ctx.__aenter__ = AsyncMock(side_effect=html_exc)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        return ctx
+
+    session.get = _get
+    return session
+
+
+async def test_html_failure_tolerated():
+    """A failing HTML page still yields XML alerts, just without map URLs."""
+    client = MeteoRomaniaApiClient(
+        _make_session_partial(SAMPLE_XML_ONE_ALERT, Exception("503 Service Unavailable"))
+    )
+    result = await client.fetch_alerts()
+
+    assert result["alert_count"] == 1
+    assert "url" not in result["alert 1"]
+
+
+async def test_malformed_xml_raises():
+    """Invalid XML surfaces as MeteoRomaniaApiError, not a raw parser error."""
+    client = MeteoRomaniaApiClient(_make_session(b"<not-valid-xml", SAMPLE_HTML_EMPTY))
+
+    with pytest.raises(MeteoRomaniaApiError):
         await client.fetch_alerts()
 
 

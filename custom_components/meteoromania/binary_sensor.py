@@ -80,8 +80,8 @@ def strip_diacritics(text: str) -> str:
 # ── Local summary helpers ─────────────────────────────────────────────
 
 
-def _warning_relevant(warning: dict, full_text: str, county: str) -> bool:
-    """Return True if *warning* is relevant for *county*."""
+def _warning_relevant(full_text: str, county: str) -> bool:
+    """Return True if a warning's *full_text* is relevant for *county*."""
     text_lower = full_text.lower()
 
     # Nationwide patterns always match.
@@ -170,7 +170,7 @@ def _build_local_alerts(data: dict, county: str) -> list[dict]:
             phenomena = w.get("phenomena", "")
             full_text = f"{title} {phenomena}"
 
-            if not _warning_relevant(w, full_text, county):
+            if not _warning_relevant(full_text, county):
                 continue
 
             sev = _SEVERITY_ORDER.get(w.get("color_code", ""), 3)

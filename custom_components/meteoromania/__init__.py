@@ -1,7 +1,7 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, CONF_COUNTY
+from .const import DOMAIN, CONF_COUNTY, PLATFORMS
 from .coordinator import MeteoRomaniaDataUpdateCoordinator
 
 
@@ -14,8 +14,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
-    await hass.config_entries.async_forward_entry_setups(entry, ["binary_sensor"])
-    
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
     return True
 
 
@@ -28,9 +28,9 @@ async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload MeteoRomania entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["binary_sensor"])
-    
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-    
+
     return unload_ok

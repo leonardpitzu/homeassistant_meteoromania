@@ -175,23 +175,19 @@ def test_extract_phenomena_cold():
 
 
 def test_warning_relevant_direct_county():
-    w = {"color_code": "GALBEN"}
-    assert _warning_relevant(w, "Vânt în județul Brașov", "Brașov") is True
+    assert _warning_relevant("Vânt în județul Brașov", "Brașov") is True
 
 
 def test_warning_relevant_region():
-    w = {"color_code": "GALBEN"}
-    assert _warning_relevant(w, "precipitații în Transilvania", "Brașov") is True
+    assert _warning_relevant("precipitații în Transilvania", "Brașov") is True
 
 
 def test_warning_relevant_nationwide():
-    w = {"color_code": "GALBEN"}
-    assert _warning_relevant(w, "în toate regiunile", "Constanța") is True
+    assert _warning_relevant("în toate regiunile", "Constanța") is True
 
 
 def test_warning_not_relevant():
-    w = {"color_code": "GALBEN"}
-    assert _warning_relevant(w, "în județele Botoșani, Iași", "Brașov") is False
+    assert _warning_relevant("în județele Botoșani, Iași", "Brașov") is False
 
 
 def test_local_alerts_brasov():
