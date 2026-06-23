@@ -100,7 +100,7 @@ def _make_session(xml_bytes: bytes, html_bytes: bytes):
 
 
 async def test_fetch_alerts_single():
-    """One alert with one warning is parsed correctly."""
+    """A header-less message collapses into a default alert with one warning."""
     client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT, SAMPLE_HTML_ONE_MAP))
     result = await client.fetch_alerts()
 
@@ -108,27 +108,29 @@ async def test_fetch_alerts_single():
     assert result["alert_count"] == 1
 
     alert = result["alert 1"]
-    assert alert["type"] == "Avertizare meteorologica"
-    assert alert["color_code"] == "GALBEN"
-    assert "harta.svg.php" in alert["url"]
+    assert alert["type"] == "ATENȚIONARE METEOROLOGICĂ"
+    assert alert["color_code"] == "NECUNOSCUT"
+    assert "url" not in alert
 
     warning = alert["warning 1"]
     assert warning["color_code"] == "GALBEN"
     assert "15 februarie" in warning["interval"]
     assert "intensificari" in warning["title"]
     assert "vantul" in warning["phenomena"]
+    assert "harta.svg.php" in warning["url"]
 
 
 async def test_fetch_alerts_multiple():
-    """Two alerts produce two keyed entries."""
+    """Two header-less messages become two warnings under one default alert."""
     client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_TWO_ALERTS, SAMPLE_HTML_TWO_MAPS))
     result = await client.fetch_alerts()
 
-    assert result["alert_count"] == 2
-    assert result["alert 1"]["color_code"] == "GALBEN"
-    assert result["alert 2"]["color_code"] == "PORTOCALIU"
-    assert "harta.svg.php?id=100" in result["alert 1"]["url"]
-    assert "harta.svg.php?id=200" in result["alert 2"]["url"]
+    assert result["alert_count"] == 1
+    alert = result["alert 1"]
+    assert alert["warning 1"]["color_code"] == "GALBEN"
+    assert alert["warning 2"]["color_code"] == "PORTOCALIU"
+    assert "harta.svg.php?id=100" in alert["warning 1"]["url"]
+    assert "harta.svg.php?id=200" in alert["warning 2"]["url"]
 
 
 async def test_fetch_alerts_empty():
@@ -141,35 +143,38 @@ async def test_fetch_alerts_empty():
 
 
 async def test_fetch_alerts_red():
-    """Red (culoare=2) alert is mapped to ROSU."""
+    """Red (rosu.png) image maps the warning to ROSU."""
     client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_RED_ALERT, SAMPLE_HTML_ONE_MAP))
     result = await client.fetch_alerts()
 
-    assert result["alert 1"]["color_code"] == "ROSU"
+    assert result["alert 1"]["warning 1"]["color_code"] == "ROSU"
 
 
 async def test_fetch_alerts_unknown_color():
-    """Unknown culoare value maps to NECUNOSCUT."""
+    """Unknown culoare value with no image maps to NECUNOSCUT."""
     client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_UNKNOWN_COLOR, SAMPLE_HTML_EMPTY))
     result = await client.fetch_alerts()
 
-    assert result["alert 1"]["color_code"] == "NECUNOSCUT"
+    assert result["alert 1"]["warning 1"]["color_code"] == "NECUNOSCUT"
 
 
 async def test_html_url_absolute():
-    """Relative image URL is expanded to an absolute URL."""
+    """Relative image URL is expanded to an absolute URL on the warning."""
     client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT, SAMPLE_HTML_ONE_MAP))
     result = await client.fetch_alerts()
 
-    assert result["alert 1"]["url"] == "https://www.meteoromania.ro/avertizari/harta.svg.php?id=123"
+    assert (
+        result["alert 1"]["warning 1"]["url"]
+        == "https://www.meteoromania.ro/avertizari/harta.svg.php?id=123"
+    )
 
 
 async def test_no_html_map():
-    """When HTML has no map image, alert has no 'url' key."""
+    """When HTML has no map image, the warning has no 'url' key."""
     client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT, SAMPLE_HTML_EMPTY))
     result = await client.fetch_alerts()
 
-    assert "url" not in result["alert 1"]
+    assert "url" not in result["alert 1"]["warning 1"]
 
 
 SAMPLE_HTML_LEADING_MAPLESS = b"""\
@@ -185,14 +190,14 @@ SAMPLE_HTML_LEADING_MAPLESS = b"""\
 
 
 async def test_maps_keyed_by_map_order_not_block_position():
-    """A leading map-less block must not shift every map onto the wrong alert."""
+    """A leading map-less block must not shift every map onto the wrong warning."""
     client = MeteoRomaniaApiClient(
         _make_session(SAMPLE_XML_TWO_ALERTS, SAMPLE_HTML_LEADING_MAPLESS)
     )
     result = await client.fetch_alerts()
 
-    assert "harta.svg.php?id=100" in result["alert 1"]["url"]
-    assert "harta.svg.php?id=200" in result["alert 2"]["url"]
+    assert "harta.svg.php?id=100" in result["alert 1"]["warning 1"]["url"]
+    assert "harta.svg.php?id=200" in result["alert 1"]["warning 2"]["url"]
 
 
 
@@ -241,7 +246,7 @@ async def test_html_failure_tolerated():
     result = await client.fetch_alerts()
 
     assert result["alert_count"] == 1
-    assert "url" not in result["alert 1"]
+    assert "url" not in result["alert 1"]["warning 1"]
 
 
 async def test_malformed_xml_raises():
@@ -279,10 +284,10 @@ def test_detect_image_colors():
     assert client._detect_image_colors(soup) == ["GALBEN", "PORTOCALIU", "ROSU", "NECUNOSCUT"]
 
 
-def test_parse_warnings_empty():
-    """Lines without known markers produce no warnings."""
+def test_parse_blocks_empty():
+    """Lines without known markers produce no blocks."""
     client = MeteoRomaniaApiClient(MagicMock())
-    assert client._parse_warnings(lines=["random text"], image_colors=[], fallback_color="GALBEN") == []
+    assert client._parse_blocks(["random text"], [], "GALBEN") == []
 
 
 def test_clean_color_prefix():
@@ -351,3 +356,47 @@ async def test_fenomen_variant_matched():
 
     w = result["alert 1"]["warning 1"]
     assert w["title"] == "vant puternic"
+
+
+# ---------------------------------------------------------------------------
+# Message-type grouping: INFORMARE opens an alert, ATENȚIONARE are its warnings
+# ---------------------------------------------------------------------------
+
+SAMPLE_XML_INFORMARE_WITH_WARNINGS = (
+    """\
+<?xml version="1.0" encoding="UTF-8"?>
+<avertizari>
+  <avertizare culoare="0" numeTipMesaj="x" intervalul="x"
+    mesaj="INFORMARE METEOROLOGICĂ&lt;br&gt;Interval de valabilitate: 1 mai ora 10 – 2 mai ora 21&lt;br&gt;Fenomene vizate: vreme calduroasa&lt;br&gt;Zone afectate: toata tara&lt;br&gt;Nota: descriere generala&lt;br&gt;ATENȚIONARE METEOROLOGICĂ&lt;br&gt;COD GALBEN&lt;br&gt;Interval de valabilitate: 1 mai, intervalul orar 12 – 21&lt;br&gt;Fenomene vizate: temperaturi ridicate&lt;br&gt;Zone afectate: sud&lt;br&gt;detalii sud" />
+  <avertizare culoare="0" numeTipMesaj="x" intervalul="x"
+    mesaj="ATENȚIONARE METEOROLOGICĂ&lt;br&gt;COD GALBEN&lt;br&gt;Interval de valabilitate: 1 mai, intervalul orar 10 – 21&lt;br&gt;Fenomene vizate: instabilitate atmosferica&lt;br&gt;Zone afectate: nord&lt;br&gt;detalii nord" />
+</avertizari>"""
+).encode("utf-8")
+
+
+async def test_informare_groups_atentionari_as_warnings():
+    """One INFORMARE alert collects all following ATENȚIONARE blocks as warnings."""
+    client = MeteoRomaniaApiClient(
+        _make_session(SAMPLE_XML_INFORMARE_WITH_WARNINGS, SAMPLE_HTML_TWO_MAPS)
+    )
+    result = await client.fetch_alerts()
+
+    assert result["alert_count"] == 1
+    alert = result["alert 1"]
+    assert alert["type"] == "INFORMARE METEOROLOGICĂ"
+    assert alert["color_code"] == "NECUNOSCUT"
+    assert "1 mai" in alert["interval"]
+    assert alert["title"] == "vreme calduroasa"
+    # The informare itself carries no map.
+    assert "url" not in alert
+
+    w1 = alert["warning 1"]
+    assert w1["color_code"] == "GALBEN"
+    assert w1["title"] == "temperaturi ridicate"
+    assert "harta.svg.php?id=100" in w1["url"]
+
+    w2 = alert["warning 2"]
+    assert w2["color_code"] == "GALBEN"
+    assert w2["title"] == "instabilitate atmosferica"
+    assert "harta.svg.php?id=200" in w2["url"]
+

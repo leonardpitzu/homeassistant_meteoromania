@@ -26,8 +26,12 @@ _INTERVAL_MARKER = "interval de valabilitate"
 _COD_COLOR_RE = re.compile(r"^COD\s+(GALBEN|PORTOCALIU|ROȘU|ROSU)", re.IGNORECASE)
 # Any "COD ..." line — marks the boundary between two warning blocks.
 _COD_BOUNDARY_RE = re.compile(r"^COD\s+", re.IGNORECASE)
-# "AVERTIZARE/INFORMARE METEOROLOGICĂ" section header.
-_METEO_HEADER_RE = re.compile(r"^(AVERTIZARE|INFORMARE)\s+METEOROLOGIC", re.IGNORECASE)
+# Message-type headers that delimit blocks inside an element's HTML message.
+# An INFORMARE opens an alert; ATENȚIONARE/AVERTIZARE blocks are its warnings.
+_INFORMARE_HEADER_RE = re.compile(r"^INFORMARE\s+METEOROLOGIC", re.IGNORECASE)
+_ATENTIONARE_HEADER_RE = re.compile(
+    r"^(ATEN[ȚT]IONARE|AVERTIZARE)\s+METEOROLOGIC", re.IGNORECASE
+)
 
 
 class MeteoRomaniaApiError(Exception):
@@ -69,18 +73,36 @@ class MeteoRomaniaApiClient:
 
         Pure, synchronous and free of any network/HA dependency so it can be
         reused by the standalone ``meteo_alerts_romania_parser.py`` runner.
+
+        The feed packages messages into ``<avertizare>`` elements, but the
+        meteorological grouping lives in the message text: an ``INFORMARE``
+        block opens an alert and the ``ATENȚIONARE`` (COD) blocks that follow
+        are its warnings. Blocks are collected across all elements in document
+        order, then grouped on that rule.
         """
         try:
             root = ET.fromstring(xml_content)
         except (ParseError, DefusedXmlException) as err:
             raise MeteoRomaniaApiError(f"Could not parse alerts XML: {err}") from err
 
-        alerts = {}
-        for i, alert in enumerate(root.findall(".//avertizare"), start=1):
+        blocks = []
+        for i, element in enumerate(root.findall(".//avertizare"), start=1):
             try:
-                alerts[f"alert {i}"] = self._parse_alert(alert)
-            except Exception:  # noqa: BLE001 - one malformed alert must not drop the rest
-                _LOGGER.exception("Skipping malformed MeteoRomania alert %d", i)
+                fallback_color = _COLOR_BY_CULOARE.get(
+                    element.attrib.get("culoare", "").strip(), "NECUNOSCUT"
+                )
+                lines, soup = self._extract_lines(
+                    unescape(element.attrib.get("mesaj", ""))
+                )
+                blocks.extend(
+                    self._parse_blocks(
+                        lines, self._detect_image_colors(soup), fallback_color
+                    )
+                )
+            except Exception:  # noqa: BLE001 - one malformed element must not drop the rest
+                _LOGGER.exception("Skipping malformed MeteoRomania avertizare %d", i)
+
+        alerts = self._group_blocks(blocks)
 
         if html_content is not None:
             try:
@@ -102,54 +124,143 @@ class MeteoRomaniaApiClient:
             resp.raise_for_status()
             return await resp.read()
 
-    def _parse_alert(self, alert) -> dict:
-        """Parse a single ``<avertizare>`` element into an alert dict."""
-        alert_level_color = _COLOR_BY_CULOARE.get(
-            alert.attrib.get("culoare", "").strip(), "NECUNOSCUT"
-        )
+    def _parse_blocks(self, lines, image_colors, fallback_color):
+        """Parse one element's HTML lines into a flat list of message blocks.
 
-        result = {
-            "type": alert.attrib.get("numeTipMesaj", "").strip(),
-            "interval": alert.attrib.get("intervalul", "").strip(),
-            "color_code": alert_level_color,
-        }
+        Each block is one "Interval de valabilitate" section tagged with its
+        ``kind`` ("informare" or "atentionare") from the most recent message
+        header. Colour comes from a preceding "COD <colour>" header, else the
+        next map image colour, else the element's ``culoare``; informare
+        blocks carry no COD colour.
+        """
+        blocks = []
+        colors = iter(image_colors)
+        pending_color = None
+        kind = "atentionare"
 
-        decoded_html = unescape(alert.attrib.get("mesaj", ""))
-        lines, soup = self._extract_lines(decoded_html)
-        image_colors = self._detect_image_colors(soup)
+        def block_color():
+            nonlocal pending_color
+            if pending_color:
+                color, pending_color = pending_color, None
+                return color
+            if kind == "informare":
+                return "NECUNOSCUT"
+            image_color = next(colors, "NECUNOSCUT")
+            return image_color if image_color != "NECUNOSCUT" else fallback_color
 
-        warnings = self._parse_warnings(
-            lines=lines,
-            image_colors=image_colors,
-            fallback_color=alert_level_color,
-        )
+        i = 0
+        while i < len(lines):
+            line = lines[i]
 
-        for idx, warning in enumerate(warnings, start=1):
-            result[f"warning {idx}"] = warning
+            if _INFORMARE_HEADER_RE.match(line):
+                kind = "informare"
+                i += 1
+                continue
+            if _ATENTIONARE_HEADER_RE.match(line):
+                kind = "atentionare"
+                i += 1
+                continue
+            if _COD_COLOR_RE.match(line):
+                pending_color = line.split()[1].replace("ROȘU", "ROSU")
+                i += 1
+                continue
 
-        return result
+            if _INTERVAL_MARKER in line.lower():
+                block = {"kind": kind, "color_code": block_color()}
+                pending_color = None
+                block["interval"] = self._clean_color_prefix(
+                    line.split(":", 1)[1].strip() if ":" in line else line
+                )
+                title, j = self._extract_warning_title(lines, i + 1)
+                block["title"] = self._clean_color_prefix(title)
+                phenomena, j = self._extract_warning_phenomena(lines, j)
+                if phenomena:
+                    block["phenomena"] = phenomena
+                blocks.append(block)
+                i = j
+                continue
+
+            i += 1
+
+        return blocks
+
+    def _group_blocks(self, blocks):
+        """Group ordered blocks into alerts.
+
+        An "informare" block opens a new alert; each "atentionare" block is a
+        warning under the currently open alert. Atenționări appearing before
+        any informare are collected under a single default alert so the binary
+        sensor still reports active warnings.
+        """
+        alerts = {}
+        current = None
+        alert_idx = 0
+        warning_idx = 0
+
+        for block in blocks:
+            if block["kind"] == "informare":
+                alert_idx += 1
+                warning_idx = 0
+                current = {
+                    "type": "INFORMARE METEOROLOGICĂ",
+                    "interval": block["interval"],
+                    "color_code": block["color_code"],
+                }
+                if block.get("title"):
+                    current["title"] = block["title"]
+                if block.get("phenomena"):
+                    current["phenomena"] = block["phenomena"]
+                alerts[f"alert {alert_idx}"] = current
+                continue
+
+            if current is None:
+                alert_idx += 1
+                warning_idx = 0
+                current = {
+                    "type": "ATENȚIONARE METEOROLOGICĂ",
+                    "color_code": "NECUNOSCUT",
+                }
+                alerts[f"alert {alert_idx}"] = current
+
+            warning_idx += 1
+            warning = {
+                "color_code": block["color_code"],
+                "interval": block["interval"],
+                "title": block["title"],
+            }
+            if block.get("phenomena"):
+                warning["phenomena"] = block["phenomena"]
+            current[f"warning {warning_idx}"] = warning
+
+        return alerts
 
     def _map_images(self, alerts: dict, html_content: bytes) -> None:
-        """Attach map image URLs from the HTML page to the parsed alerts.
+        """Attach map image URLs to the warnings, in document order.
 
-        The page lists maps in the same order as the alerts, but it also holds
-        map-less ``alerta_meteo_produse`` blocks (footer/promo). Key off the
-        order of the *maps themselves*, not the block position, so a stray
-        map-less block can never shift every URL onto the wrong alert.
+        Each ATENȚIONARE (warning) has one map and the page lists them in the
+        same order the warnings were parsed. Map-less ``alerta_meteo_produse``
+        blocks (footer/promo) are skipped so they can't shift the alignment.
+        The informare alert itself has no map.
         """
         soup = BeautifulSoup(html_content, "html.parser")
-        map_index = 0
+        urls = []
         for block in soup.find_all("div", class_="alerta_meteo_produse"):
             img = block.find("img", src=lambda x: x and "harta.svg.php" in x)
             if not img:
                 continue
-            map_index += 1
             url = img["src"]
             if url.startswith("/"):
                 url = BASE_URL + url
-            alert_key = f"alert {map_index}"
-            if alert_key in alerts:
-                alerts[alert_key]["url"] = url
+            urls.append(url)
+
+        warnings = [
+            alert[key]
+            for alert in alerts.values()
+            for key in alert
+            if key.startswith("warning ")
+        ]
+        for warning, url in zip(warnings, urls, strict=False):
+            warning["url"] = url
 
     def _extract_lines(self, html):
         soup = BeautifulSoup(html, "html.parser")
@@ -172,58 +283,6 @@ class MeteoRomaniaApiClient:
             else:
                 colors.append("NECUNOSCUT")
         return colors
-
-    def _parse_warnings(self, lines, image_colors, fallback_color):
-        """Split one alert's text lines into individual warning dicts.
-
-        Each warning starts at an "Interval de valabilitate" line and carries
-        its own interval, so a single alert can yield several warnings nested
-        within the alert-level interval. A warning's colour comes from a
-        preceding "COD <colour>" header if present, otherwise the next map
-        image colour, otherwise the alert-level fallback colour.
-        """
-        warnings = []
-        colors = iter(image_colors)
-        pending_color = None
-
-        def resolve_color():
-            nonlocal pending_color
-            if pending_color:
-                color, pending_color = pending_color, None
-                return color
-            image_color = next(colors, "NECUNOSCUT")
-            return image_color if image_color != "NECUNOSCUT" else fallback_color
-
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-
-            if _COD_COLOR_RE.match(line):
-                pending_color = line.split()[1].replace("ROȘU", "ROSU")
-                i += 1
-                continue
-
-            if _INTERVAL_MARKER in line.lower():
-                warning = {"color_code": resolve_color()}
-                pending_color = None
-                warning["interval"] = self._clean_color_prefix(
-                    line.split(":", 1)[1].strip() if ":" in line else line
-                )
-
-                title, j = self._extract_warning_title(lines, i + 1)
-                warning["title"] = self._clean_color_prefix(title)
-
-                phenomena, j = self._extract_warning_phenomena(lines, j)
-                if phenomena:
-                    warning["phenomena"] = phenomena
-
-                warnings.append(warning)
-                i = j
-                continue
-
-            i += 1
-
-        return warnings
 
     def _extract_warning_title(self, lines, j):
         """Return ``(title, next_index)`` from the "Fenomene vizate" line(s)."""
@@ -248,7 +307,8 @@ class MeteoRomaniaApiClient:
             if (_COD_BOUNDARY_RE.match(line)
                     or _INTERVAL_MARKER in line.lower()
                     or line.upper().startswith("MESAJ")
-                    or _METEO_HEADER_RE.match(line)):
+                    or _INFORMARE_HEADER_RE.match(line)
+                    or _ATENTIONARE_HEADER_RE.match(line)):
                 break
             desc.append(line)
             j += 1
