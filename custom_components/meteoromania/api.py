@@ -74,18 +74,19 @@ class MeteoRomaniaApiClient:
         Pure, synchronous and free of any network/HA dependency so it can be
         reused by the standalone ``meteo_alerts_romania_parser.py`` runner.
 
-        The feed packages messages into ``<avertizare>`` elements, but the
-        meteorological grouping lives in the message text: an ``INFORMARE``
-        block opens an alert and the ``ATENȚIONARE`` (COD) blocks that follow
-        are its warnings. Blocks are collected across all elements in document
-        order, then grouped on that rule.
+        Each ``<avertizare>`` element is one alert, exactly mirroring the
+        public page (one map per element). Inside an element the message text
+        carries the structure: an ``INFORMARE`` block is the alert's own
+        header and the ``ATENȚIONARE`` (COD) blocks that follow are its
+        warnings. Elements without an INFORMARE are plain warning alerts.
         """
         try:
             root = ET.fromstring(xml_content)
         except (ParseError, DefusedXmlException) as err:
             raise MeteoRomaniaApiError(f"Could not parse alerts XML: {err}") from err
 
-        blocks = []
+        alerts = {}
+        alert_idx = 0
         for i, element in enumerate(root.findall(".//avertizare"), start=1):
             try:
                 fallback_color = _COLOR_BY_CULOARE.get(
@@ -94,15 +95,17 @@ class MeteoRomaniaApiClient:
                 lines, soup = self._extract_lines(
                     unescape(element.attrib.get("mesaj", ""))
                 )
-                blocks.extend(
-                    self._parse_blocks(
-                        lines, self._detect_image_colors(soup), fallback_color
-                    )
+                blocks = self._parse_blocks(
+                    lines, self._detect_image_colors(soup), fallback_color
                 )
             except Exception:  # noqa: BLE001 - one malformed element must not drop the rest
                 _LOGGER.exception("Skipping malformed MeteoRomania avertizare %d", i)
+                continue
 
-        alerts = self._group_blocks(blocks)
+            if not blocks:
+                continue
+            alert_idx += 1
+            alerts[f"alert {alert_idx}"] = self._build_alert(blocks)
 
         if html_content is not None:
             try:
@@ -168,10 +171,23 @@ class MeteoRomaniaApiClient:
             if _INTERVAL_MARKER in line.lower():
                 block = {"kind": kind, "color_code": block_color()}
                 pending_color = None
-                block["interval"] = self._clean_color_prefix(
+                interval = self._clean_color_prefix(
                     line.split(":", 1)[1].strip() if ":" in line else line
                 )
-                title, j = self._extract_warning_title(lines, i + 1)
+                next_i = i + 1
+                # Some warnings put the date on the line *after* a bare
+                # "Interval de valabilitate:" — adopt it as the interval value.
+                if not interval and next_i < len(lines):
+                    nxt = lines[next_i]
+                    if not (_COD_BOUNDARY_RE.match(nxt)
+                            or _INTERVAL_MARKER in nxt.lower()
+                            or "fenomen" in nxt.lower()
+                            or _INFORMARE_HEADER_RE.match(nxt)
+                            or _ATENTIONARE_HEADER_RE.match(nxt)):
+                        interval = self._clean_color_prefix(nxt)
+                        next_i += 1
+                block["interval"] = interval
+                title, j = self._extract_warning_title(lines, next_i)
                 block["title"] = self._clean_color_prefix(title)
                 phenomena, j = self._extract_warning_phenomena(lines, j)
                 if phenomena:
@@ -184,45 +200,34 @@ class MeteoRomaniaApiClient:
 
         return blocks
 
-    def _group_blocks(self, blocks):
-        """Group ordered blocks into alerts.
+    def _build_alert(self, blocks):
+        """Build a single alert dict from one element's ordered blocks.
 
-        An "informare" block opens a new alert; each "atentionare" block is a
-        warning under the currently open alert. Atenționări appearing before
-        any informare are collected under a single default alert so the binary
-        sensor still reports active warnings.
+        An "informare" block, if present, supplies the alert's own header
+        (type ``INFORMARE METEOROLOGICĂ`` with its interval/title/phenomena);
+        otherwise the alert is a plain ``ATENȚIONARE METEOROLOGICĂ``. Every
+        "atentionare" block becomes a numbered warning under the alert.
         """
-        alerts = {}
-        current = None
-        alert_idx = 0
-        warning_idx = 0
+        informare = next((b for b in blocks if b["kind"] == "informare"), None)
+        warnings = [b for b in blocks if b["kind"] != "informare"]
 
-        for block in blocks:
-            if block["kind"] == "informare":
-                alert_idx += 1
-                warning_idx = 0
-                current = {
-                    "type": "INFORMARE METEOROLOGICĂ",
-                    "interval": block["interval"],
-                    "color_code": block["color_code"],
-                }
-                if block.get("title"):
-                    current["title"] = block["title"]
-                if block.get("phenomena"):
-                    current["phenomena"] = block["phenomena"]
-                alerts[f"alert {alert_idx}"] = current
-                continue
+        if informare is not None:
+            alert = {
+                "type": "INFORMARE METEOROLOGICĂ",
+                "interval": informare["interval"],
+                "color_code": informare["color_code"],
+            }
+            if informare.get("title"):
+                alert["title"] = informare["title"]
+            if informare.get("phenomena"):
+                alert["phenomena"] = informare["phenomena"]
+        else:
+            alert = {
+                "type": "ATENȚIONARE METEOROLOGICĂ",
+                "color_code": "NECUNOSCUT",
+            }
 
-            if current is None:
-                alert_idx += 1
-                warning_idx = 0
-                current = {
-                    "type": "ATENȚIONARE METEOROLOGICĂ",
-                    "color_code": "NECUNOSCUT",
-                }
-                alerts[f"alert {alert_idx}"] = current
-
-            warning_idx += 1
+        for idx, block in enumerate(warnings, start=1):
             warning = {
                 "color_code": block["color_code"],
                 "interval": block["interval"],
@@ -230,24 +235,26 @@ class MeteoRomaniaApiClient:
             }
             if block.get("phenomena"):
                 warning["phenomena"] = block["phenomena"]
-            current[f"warning {warning_idx}"] = warning
+            alert[f"warning {idx}"] = warning
 
-        return alerts
+        return alert
 
     def _map_images(self, alerts: dict, html_content: bytes) -> None:
         """Attach map image URLs to the alerts/warnings, in document order.
 
         The page lists one ``alerta_meteo_produse`` block per product; only
         some carry a ``harta.svg.php`` map (others are map-less nowcasting or
-        footer blocks). Following the original parser, the maps are collected
-        in document order and the map-less blocks are skipped so a stray one
-        can never shift every URL onto the wrong target.
+        footer blocks). The maps are collected in document order and the
+        map-less blocks are skipped so a stray one can never shift every URL
+        onto the wrong target.
 
-        An alert is just a stub that introduces what follows, so its warnings
-        are the real map targets; the maps line up with them in order. A lone
-        alert with no warnings can still carry its own map. Either side may be
-        shorter than the other (a block can come with or without a map), so the
-        zip is non-strict.
+        The feed is inconsistent about granularity: sometimes there is one map
+        per alert (shared by all its warnings) and sometimes one map per
+        warning. The count of maps disambiguates — when it matches the number
+        of alerts (and that differs from the number of warnings) the map is
+        attached to the whole alert; otherwise each warning gets its own map,
+        with a lone warning-less alert carrying its map directly. The zip is
+        non-strict so either side may be the shorter one.
         """
         soup = BeautifulSoup(html_content, "html.parser")
         urls = []
@@ -260,10 +267,20 @@ class MeteoRomaniaApiClient:
                 url = BASE_URL + url
             urls.append(url)
 
-        targets = []
-        for alert in alerts.values():
+        if not urls:
+            return
+
+        alert_list = list(alerts.values())
+        # Per-warning targets: each warning, or the alert itself if it has none.
+        warning_targets = []
+        for alert in alert_list:
             warnings = [alert[key] for key in alert if key.startswith("warning ")]
-            targets.extend(warnings if warnings else [alert])
+            warning_targets.extend(warnings if warnings else [alert])
+
+        if len(urls) == len(alert_list) and len(alert_list) != len(warning_targets):
+            targets = alert_list
+        else:
+            targets = warning_targets
 
         for target, url in zip(targets, urls, strict=False):
             target["url"] = url
