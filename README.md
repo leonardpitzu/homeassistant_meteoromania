@@ -16,12 +16,15 @@ The entity exposes **detailed attributes** for every active alert:
 |---|---|
 | `has_alerts` | Whether any alerts are currently active |
 | `alert_count` | Total number of active alerts |
-| `alert N → type` | Alert type (e.g. *Avertizare meteorologică*) |
-| `alert N → interval` | Validity interval as reported by ANM |
-| `alert N → color_code` | Severity — `GALBEN`, `PORTOCALIU`, or `ROSU` |
+| `alert N → type` | Alert type — `INFORMARE METEOROLOGICĂ` or `ATENȚIONARE METEOROLOGICĂ` |
+| `alert N → color_code` | Alert severity — `GALBEN`, `PORTOCALIU`, `ROSU`, or `NECUNOSCUT` |
+| `alert N → interval` | Validity interval (present on `INFORMARE` alerts) |
+| `alert N → title` | Headline of the alert (present on `INFORMARE` alerts) |
+| `alert N → warning M → color_code` | Severity of the individual warning |
+| `alert N → warning M → interval` | Validity interval of the warning |
 | `alert N → warning M → title` | Headline phenomena for each warning inside the alert |
-| `alert N → warning M → phenomena` | Full description of weather phenomena |
-| `alert N → url` | Link to the SVG alert map on meteoromania.ro |
+| `alert N → warning M → phenomena` | Full description of weather phenomena (optional) |
+| `alert N → url` | Link to the SVG alert map on meteoromania.ro (per-alert or per-warning) |
 | `local_alerts` | List of per-warning dicts with `icon`, `text`, `color`, `r`, `g`, `b` (only when a county is configured) |
 | `local_summary` | Concise, region-filtered summary string (only when a county is configured) |
 | `last_updated` | ISO timestamp of the most recent successful poll |
@@ -29,9 +32,10 @@ The entity exposes **detailed attributes** for every active alert:
 Example attribute structure:
 ```
 alert 1:
-  type: Avertizare meteorologică
-  interval: 22 februarie, ora 10:00 – 23 februarie, ora 06:00
+  type: INFORMARE METEOROLOGICĂ
   color_code: PORTOCALIU
+  interval: 22 februarie, ora 10:00 – 23 februarie, ora 06:00
+  title: Ninsori și intensificări ale vântului
   warning 1:
     color_code: PORTOCALIU
     interval: 22 februarie, ora 10:00 – 23 februarie, ora 06:00
@@ -39,6 +43,11 @@ alert 1:
     phenomena: Se vor semnala ninsori abundente…
   url: https://www.meteoromania.ro/harta.svg.php?…
 ```
+
+> Plain warnings (without a national *informare*) come through as
+> `type: ATENȚIONARE METEOROLOGICĂ` and omit the alert-level `interval`/`title`.
+> Always use `.get()` in templates for optional keys (`interval`, `title`,
+> `phenomena`, `url`) — a missing-key subscript makes a Markdown card render blank.
 
 Data is polled every **60 minutes**.
 
@@ -61,8 +70,7 @@ Data is polled every **60 minutes**.
 
 1. Go to **Settings** → **Devices & Services** → **Add Integration**.
 2. Search for **MeteoRomania**.
-3. Confirm — no credentials are needed (ANM data is public).
-4. *(Optional)* Select your **county** to enable the `local_summary` attribute.
+3. On the setup form, *(optionally)* pick your **county** to enable the `local_alerts` / `local_summary` attributes — leave it on *None (show all)* for nationwide coverage. No credentials are needed (ANM data is public).
 
 Only a single instance of the integration is allowed.
 
@@ -86,8 +94,8 @@ A list of all per-warning dictionaries relevant to your county, sorted by severi
 Example:
 ```json
 [
-  {"icon": "alert_yellow", "text": "Strong wind, Snow 40-45km/h 22 apr 10:00 - 24 apr 10:00", "color": "GALBEN", "r": 255, "g": 255, "b": 0},
-  {"icon": "alert_orange", "text": "Strong wind 70-90km/h 23 apr 12:00-20:00", "color": "PORTOCALIU", "r": 255, "g": 126, "b": 0}
+  {"icon": "alert_yellow", "text": "Strong wind, Snow 40-45km/h 22/4 10h-24/4 10h", "color": "GALBEN", "r": 255, "g": 200, "b": 0},
+  {"icon": "alert_orange", "text": "Strong wind 70-90km/h 23/4 12h-20h", "color": "PORTOCALIU", "r": 255, "g": 120, "b": 0}
 ]
 ```
 
@@ -98,8 +106,8 @@ This is ideal for driving per-warning screens on ESPHome pixel displays (Awtrix-
 A compact multi-line string derived from `local_alerts`, one line per warning with a colour emoji prefix:
 
 ```
-🟡 Strong wind, Snow 40-45km/h 22 apr 10:00 - 24 apr 10:00
-🟠 Strong wind 70-90km/h 23 apr 12:00-20:00
+🟡 Strong wind, Snow 40-45km/h 22/4 10h-24/4 10h
+🟠 Strong wind 70-90km/h 23/4 12h-20h
 ```
 
 Use it in templates:
@@ -108,12 +116,75 @@ Use it in templates:
 {{ state_attr('binary_sensor.meteoromania', 'local_summary') }}
 ```
 
-## Dashboard ideas
+## Dashboard
 
-- Use a **conditional card** that only appears when `binary_sensor.meteoromania` is **on** to surface weather warnings without cluttering your dashboard on calm days.
-- Use **Markdown cards** with Jinja templates to render each alert's colour code, phenomena, and validity interval in a styled list.
-- Display the **alert map** (`url` attribute) with a [Picture Entity card](https://www.home-assistant.io/dashboards/picture-entity/) for a visual overview of affected regions.
-- Trigger **automations** (e.g. send a mobile notification) whenever the binary sensor transitions from `off` to `on`.
+The following [Markdown card](https://www.home-assistant.io/dashboards/markdown/) renders every active alert and its warnings — colour-coded headers, validity intervals, phenomena descriptions, and the SVG alert map for each warning (falling back to the alert's shared map). When there are no alerts it shows a single tidy line:
+
+```yaml
+type: markdown
+title: Weather Alerts
+content: |
+  {% set eid = 'binary_sensor.meteoromania' %}
+  {% if is_state(eid, 'on') %}
+  {% for i in range(1, (state_attr(eid, 'alert_count') | int(0)) + 1) %}
+  {% set a = state_attr(eid, 'alert ' ~ i) %}
+  {% if a %}
+  ### ⚠️ Alert {{ i }} — {{ a.get('type', '') }}
+  **Cod:** {{ a.get('color_code', '') }}
+  {% if a.get('interval') %}**Interval:** {{ a.get('interval') }}{% endif %}
+  {% if a.get('title') %}
+  _{{ a.get('title') }}_
+  {% endif %}
+  {% set wcount = a.keys() | select('match', '^warning ') | list | count %}
+  {% for j in range(1, wcount + 1) %}
+  {% set w = a.get('warning ' ~ j) %}
+  {% if w %}
+  {% set c = (w.get('color_code', '')) | upper %}
+  {% set icon = '🟡' if c == 'GALBEN' else '🟠' if c == 'PORTOCALIU' else '🔴' if c == 'ROSU' else '⚪' %}
+  {% set murl = w.get('url') or a.get('url') %}
+  #### {{ icon }} Warning {{ j }} — {{ w.get('title', '') }}
+  {% if w.get('interval') %}**Interval:** {{ w.get('interval') }}{% endif %}
+  {% if w.get('phenomena') %}
+  {{ w.get('phenomena') }}
+  {% endif %}
+  {% if murl %}
+  ![Warning {{ j }} map]({{ murl }})
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+  {% if wcount == 0 and a.get('url') %}
+  ![Alert {{ i }} map]({{ a.get('url') }})
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+  {% else %}
+  ✅ No current meteo alerts.
+  {% endif %}
+```
+
+Put it on its own view and add a **conditional badge** to your main view that only shows up (and links to the alerts view) when something is active:
+
+```yaml
+type: entity
+entity: binary_sensor.meteoromania
+name: Weather Alerts
+show_name: true
+show_state: false
+show_icon: true
+visibility:
+  - condition: state
+    entity: binary_sensor.meteoromania
+    state: "on"
+tap_action:
+  action: navigate
+  navigation_path: /lovelace-weather/weather-alert
+```
+
+### Other ideas
+
+- Drive an **automation** (e.g. a mobile notification) off the binary sensor's `off` → `on` transition.
+- Feed `local_summary` into a compact text/Markdown card, or `local_alerts` into per-warning screens on an ESPHome pixel display.
+- Display a single `url` map directly with a [Picture card](https://www.home-assistant.io/dashboards/picture/).
 
 ## License
 
