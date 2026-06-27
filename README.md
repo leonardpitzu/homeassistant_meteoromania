@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-A custom [Home Assistant](https://www.home-assistant.io/) integration that monitors official weather alerts from [Administrația Națională de Meteorologie (ANM)](https://www.meteoromania.ro/) — colour-coded warnings, affected phenomena, validity intervals, and alert maps, all at a glance.
+A custom [Home Assistant](https://www.home-assistant.io/) integration that monitors official weather alerts from [Administrația Națională de Meteorologie (ANM)](https://www.meteoromania.ro/) - colour-coded warnings, affected phenomena, validity intervals, and alert maps, all at a glance.
 
 ## Features
 
@@ -16,15 +16,15 @@ The entity exposes **detailed attributes** for every active alert:
 |---|---|
 | `has_alerts` | Whether any alerts are currently active |
 | `alert_count` | Total number of active alerts |
-| `alert N → type` | Alert type — `INFORMARE METEOROLOGICĂ` or `ATENȚIONARE METEOROLOGICĂ` |
-| `alert N → color_code` | Alert severity — `GALBEN`, `PORTOCALIU`, `ROSU`, or `NECUNOSCUT` |
-| `alert N → interval` | Validity interval (present on `INFORMARE` alerts) |
-| `alert N → title` | Headline of the alert (present on `INFORMARE` alerts) |
-| `alert N → warning M → color_code` | Severity of the individual warning |
-| `alert N → warning M → interval` | Validity interval of the warning |
-| `alert N → warning M → title` | Headline phenomena for each warning inside the alert |
-| `alert N → warning M → phenomena` | Full description of weather phenomena (optional) |
-| `alert N → url` | Link to the SVG alert map on meteoromania.ro (per-alert or per-warning) |
+| `alert N -> type` | Alert type - `INFORMARE METEOROLOGICĂ` or `ATENȚIONARE METEOROLOGICĂ` |
+| `alert N -> color_code` | Alert severity - `GALBEN`, `PORTOCALIU`, `ROSU`, or `NECUNOSCUT` |
+| `alert N -> interval` | Validity interval (present on `INFORMARE` alerts) |
+| `alert N -> title` | Headline of the alert (present on `INFORMARE` alerts) |
+| `alert N -> warning M -> color_code` | Severity of the individual warning |
+| `alert N -> warning M -> interval` | Validity interval of the warning |
+| `alert N -> warning M -> title` | Headline phenomena for each warning inside the alert |
+| `alert N -> warning M -> phenomena` | Full description of weather phenomena (optional) |
+| `alert N -> url` | Link to the SVG alert map on meteoromania.ro (per-alert or per-warning) |
 | `local_alerts` | List of per-warning dicts with `icon`, `text`, `color`, `r`, `g`, `b` (only when a county is configured) |
 | `local_summary` | Concise, region-filtered summary string (only when a county is configured) |
 | `last_updated` | ISO timestamp of the most recent successful poll |
@@ -34,20 +34,20 @@ Example attribute structure:
 alert 1:
   type: INFORMARE METEOROLOGICĂ
   color_code: PORTOCALIU
-  interval: 22 februarie, ora 10:00 – 23 februarie, ora 06:00
+  interval: 22 februarie, ora 10:00 - 23 februarie, ora 06:00
   title: Ninsori și intensificări ale vântului
   warning 1:
     color_code: PORTOCALIU
-    interval: 22 februarie, ora 10:00 – 23 februarie, ora 06:00
+    interval: 22 februarie, ora 10:00 - 23 februarie, ora 06:00
     title: ninsori viscolite, strat de zăpadă
-    phenomena: Se vor semnala ninsori abundente…
-  url: https://www.meteoromania.ro/harta.svg.php?…
+    phenomena: Se vor semnala ninsori abundente...
+  url: https://www.meteoromania.ro/harta.svg.php?...
 ```
 
 > Plain warnings (without a national *informare*) come through as
 > `type: ATENȚIONARE METEOROLOGICĂ` and omit the alert-level `interval`/`title`.
 > Always use `.get()` in templates for optional keys (`interval`, `title`,
-> `phenomena`, `url`) — a missing-key subscript makes a Markdown card render blank.
+> `phenomena`, `url`) - a missing-key subscript makes a Markdown card render blank.
 
 Data is polled every **60 minutes**.
 
@@ -56,7 +56,7 @@ Data is polled every **60 minutes**.
 ### HACS (recommended)
 
 1. Open HACS in your Home Assistant instance.
-2. Go to **Integrations** → **⋮** → **Custom repositories**.
+2. Go to **Integrations** -> **⋮** -> **Custom repositories**.
 3. Add `https://github.com/leonardpitzu/homeassistant_meteoromania` as an **Integration**.
 4. Search for **MeteoRomania** and install it.
 5. Restart Home Assistant.
@@ -68,13 +68,13 @@ Data is polled every **60 minutes**.
 
 ## Configuration
 
-1. Go to **Settings** → **Devices & Services** → **Add Integration**.
+1. Go to **Settings** -> **Devices & Services** -> **Add Integration**.
 2. Search for **MeteoRomania**.
-3. On the setup form, *(optionally)* pick your **county** to enable the `local_alerts` / `local_summary` attributes — leave it on *None (show all)* for nationwide coverage. No credentials are needed (ANM data is public).
+3. On the setup form, *(optionally)* pick your **county** to enable the `local_alerts` / `local_summary` attributes - leave it on *None (show all)* for nationwide coverage. No credentials are needed (ANM data is public).
 
 Only a single instance of the integration is allowed.
 
-You can change the county at any time via **Settings** → **Devices & Services** → **MeteoRomania** → **Configure**.
+You can change the county at any time via **Settings** -> **Devices & Services** -> **MeteoRomania** -> **Configure**.
 
 ### Local alerts
 
@@ -82,7 +82,7 @@ When a county is configured, the sensor gains two extra attributes:
 
 #### `local_alerts` (list)
 
-A list of all per-warning dictionaries relevant to your county, sorted by severity (red → orange → yellow), each containing:
+A list of all per-warning dictionaries relevant to your county, sorted by severity (red -> orange -> yellow), each containing:
 
 | Key | Description |
 |---|---|
@@ -118,7 +118,7 @@ Use it in templates:
 
 ## Dashboard
 
-The following [Markdown card](https://www.home-assistant.io/dashboards/markdown/) renders every active alert and its warnings — colour-coded headers, validity intervals, phenomena descriptions, and the SVG alert map for each warning (falling back to the alert's shared map). When there are no alerts it shows a single tidy line:
+The following [Markdown card](https://www.home-assistant.io/dashboards/markdown/) renders every active alert and its warnings - colour-coded headers, validity intervals, phenomena descriptions, and the SVG alert map for each warning (falling back to the alert's shared map). When there are no alerts it shows a single tidy line:
 
 ```yaml
 type: markdown
@@ -129,7 +129,7 @@ content: |
   {% for i in range(1, (state_attr(eid, 'alert_count') | int(0)) + 1) %}
   {% set a = state_attr(eid, 'alert ' ~ i) %}
   {% if a %}
-  ### ⚠️ Alert {{ i }} — {{ a.get('type', '') }}
+  ### ⚠️ Alert {{ i }} - {{ a.get('type', '') }}
   **Cod:** {{ a.get('color_code', '') }}
   {% if a.get('interval') %}**Interval:** {{ a.get('interval') }}{% endif %}
   {% if a.get('title') %}
@@ -142,7 +142,7 @@ content: |
   {% set c = (w.get('color_code', '')) | upper %}
   {% set icon = '🟡' if c == 'GALBEN' else '🟠' if c == 'PORTOCALIU' else '🔴' if c == 'ROSU' else '⚪' %}
   {% set murl = w.get('url') or a.get('url') %}
-  #### {{ icon }} Warning {{ j }} — {{ w.get('title', '') }}
+  #### {{ icon }} Warning {{ j }} - {{ w.get('title', '') }}
   {% if w.get('interval') %}**Interval:** {{ w.get('interval') }}{% endif %}
   {% if w.get('phenomena') %}
   {{ w.get('phenomena') }}
@@ -182,10 +182,10 @@ tap_action:
 
 ### Other ideas
 
-- Drive an **automation** (e.g. a mobile notification) off the binary sensor's `off` → `on` transition.
+- Drive an **automation** (e.g. a mobile notification) off the binary sensor's `off` -> `on` transition.
 - Feed `local_summary` into a compact text/Markdown card, or `local_alerts` into per-warning screens on an ESPHome pixel display.
 - Display a single `url` map directly with a [Picture card](https://www.home-assistant.io/dashboards/picture/).
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
