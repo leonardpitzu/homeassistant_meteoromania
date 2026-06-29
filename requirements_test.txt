@@ -1,4 +1,4 @@
 beautifulsoup4
 defusedxml
 pytest-homeassistant-custom-component==0.13.322
-ruff==0.15.18
+ruff==0.15.20
