@@ -51,6 +51,18 @@ SAMPLE_XML_UNKNOWN_COLOR = b"""\
     mesaj="&lt;br&gt;Interval de valabilitate: test&lt;br&gt;Fenomene vizate: test&lt;br&gt;detalii" />
 </avertizari>"""
 
+# The feed sometimes splits a complete interval across a stray <br>, leaving the
+# "Interval de valabilitate:" line ending in a bare fragment ("1") with the rest
+# of the date on the following line. Without stitching, the fragment becomes the
+# interval and the "Fenomene vizate:" line is swallowed into the description.
+SAMPLE_XML_SPLIT_INTERVAL = b"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<avertizari>
+  <avertizare culoare="0" numeTipMesaj="Avertizare meteorologica" intervalul="1 iulie"
+    mesaj="&lt;img src=&quot;/images/galben.png&quot;&gt;&lt;br&gt;Interval de valabilitate: 1&lt;br&gt;iulie, ora 12 - 1 iulie, ora 21&lt;br&gt;Fenomene vizate: val de caldura intens si persistent&lt;br&gt;Zone afectate: nordul tarii." />
+</avertizari>"""
+
+
 SAMPLE_HTML_ONE_MAP = b"""\
 <html><body>
 <div class="alerta_meteo_produse">
@@ -157,6 +169,20 @@ async def test_fetch_alerts_unknown_color():
     result = await client.fetch_alerts()
 
     assert result["alert 1"]["warning 1"]["color_code"] == "NECUNOSCUT"
+
+
+async def test_fetch_alerts_split_interval():
+    """A line-break-split interval is stitched, keeping the title/phenomena intact."""
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_SPLIT_INTERVAL, SAMPLE_HTML_EMPTY))
+    result = await client.fetch_alerts()
+
+    warning = result["alert 1"]["warning 1"]
+    # Fragment "1" + continuation "iulie, ora 12 ..." form the full interval.
+    assert warning["interval"] == "1 iulie, ora 12 - 1 iulie, ora 21"
+    # The "Fenomene vizate:" line becomes the title, not part of the description.
+    assert warning["title"] == "val de caldura intens si persistent"
+    assert "iulie, ora 12" not in warning.get("phenomena", "")
+    assert "Zone afectate" in warning["phenomena"]
 
 
 async def test_html_url_absolute():

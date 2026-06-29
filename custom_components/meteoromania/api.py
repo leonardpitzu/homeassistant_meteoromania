@@ -175,16 +175,21 @@ class MeteoRomaniaApiClient:
                     line.split(":", 1)[1].strip() if ":" in line else line
                 )
                 next_i = i + 1
-                # Some warnings put the date on the line *after* a bare
-                # "Interval de valabilitate:" — adopt it as the interval value.
-                if not interval and next_i < len(lines):
+                # The interval value can be split across a stray line break:
+                # either a bare "Interval de valabilitate:" with the date on the
+                # next line, or a complete interval broken mid-value (e.g. "...: 1"
+                # then "iulie, ora 12 – 1 iulie, ora 21"). A complete interval
+                # always carries the "ora <time>" marker, so when it is missing the
+                # value is a fragment — stitch the continuation line back on.
+                if "ora" not in interval.lower() and next_i < len(lines):
                     nxt = lines[next_i]
                     if not (_COD_BOUNDARY_RE.match(nxt)
                             or _INTERVAL_MARKER in nxt.lower()
                             or "fenomen" in nxt.lower()
                             or _INFORMARE_HEADER_RE.match(nxt)
                             or _ATENTIONARE_HEADER_RE.match(nxt)):
-                        interval = self._clean_color_prefix(nxt)
+                        cont = self._clean_color_prefix(nxt)
+                        interval = f"{interval} {cont}".strip()
                         next_i += 1
                 block["interval"] = interval
                 title, j = self._extract_warning_title(lines, next_i)
