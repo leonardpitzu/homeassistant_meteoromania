@@ -74,7 +74,12 @@ PHENOMENA_MAP = [
     (r"furtuni|furtună|vijelii|vijelie", "Storms"),
     (r"descărcări\s+electrice", "Thunderstorms"),
     (r"grindină", "Hail"),
-    (r"caniculă|val\s+de\s+căldură|temperaturi\s+ridicate|cald\b", "Extreme heat"),
+    (
+        r"caniculă|canicul|val\s+de\s+căldură|temperaturi\s+ridicate"
+        r"|temperaturi\s+extreme|nopți\s+tropicale|nopti\s+tropicale"
+        r"|disconfort\s+termic|cald\b",
+        "Extreme heat",
+    ),
     (r"ger\b|temperaturi\s+scăzute|rece\b|frig\b", "Cold"),
     (r"brumă|îngheț", "Frost"),
     (r"ceață", "Fog"),

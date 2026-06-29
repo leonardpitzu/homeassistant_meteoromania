@@ -77,6 +77,15 @@ def strip_diacritics(text: str) -> str:
     return text.translate(_RO_DIACRITICS)
 
 
+def _truncate_words(text: str, limit: int = 46) -> str:
+    """Truncate *text* to at most *limit* chars without cutting a word in half."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(' ', 1)[0]
+    return (cut or text[:limit]).rstrip(' ,;-')
+
+
 # ── Local summary helpers ─────────────────────────────────────────────
 
 
@@ -106,7 +115,7 @@ def _extract_phenomena_label(title: str, phenomena: str) -> str:
         if re.search(pattern, combined, re.IGNORECASE):
             if label not in labels:
                 labels.append(label)
-    return ", ".join(labels[:2]) if labels else strip_diacritics(title[:30])
+    return ", ".join(labels[:2]) if labels else _truncate_words(strip_diacritics(title))
 
 
 def _short_time(t: str) -> str:
@@ -133,7 +142,7 @@ def _compact_interval(interval: str) -> str:
         if m1.lower() == m2.lower() and d1 == d2:
             return f"{int(d1)}/{mn1} {st1}-{st2}"
         return f"{int(d1)}/{mn1} {st1}-{int(d2)}/{mn2} {st2}"
-    return strip_diacritics(interval[:30])
+    return _truncate_words(strip_diacritics(interval))
 
 
 def _extract_wind_speed(text: str) -> str:
