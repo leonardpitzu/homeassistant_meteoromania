@@ -19,6 +19,9 @@ BASE_URL = "https://www.meteoromania.ro"
 # Numeric ``culoare`` attribute -> colour name.
 _COLOR_BY_CULOARE = {"0": "GALBEN", "1": "PORTOCALIU", "2": "ROSU"}
 
+# Warning colour severity, most severe first, for rolling warnings up to their alert.
+_COLOR_SEVERITY = {"ROSU": 3, "PORTOCALIU": 2, "GALBEN": 1, "NECUNOSCUT": 0}
+
 # A warning block starts at this marker line inside an alert's HTML message.
 _INTERVAL_MARKER = "interval de valabilitate"
 
@@ -36,6 +39,20 @@ _ATENTIONARE_HEADER_RE = re.compile(
 
 class MeteoRomaniaApiError(Exception):
     """Raised when alert data cannot be retrieved or parsed."""
+
+
+def _most_severe_color(warnings: list[dict]) -> str:
+    """Return the most severe ``color_code`` among *warnings*.
+
+    An ATENȚIONARE alert has no COD colour of its own; the public page shows it
+    with the colour of its highest-severity warning (e.g. "COD GALBEN"). Roll
+    the warnings up the same way so the alert-level ``color_code`` matches.
+    """
+    return max(
+        (w.get("color_code", "NECUNOSCUT") for w in warnings),
+        key=lambda c: _COLOR_SEVERITY.get(c, 0),
+        default="NECUNOSCUT",
+    )
 
 
 class MeteoRomaniaApiClient:
@@ -229,7 +246,7 @@ class MeteoRomaniaApiClient:
         else:
             alert = {
                 "type": "ATENȚIONARE METEOROLOGICĂ",
-                "color_code": "NECUNOSCUT",
+                "color_code": _most_severe_color(warnings),
             }
 
         for idx, block in enumerate(warnings, start=1):

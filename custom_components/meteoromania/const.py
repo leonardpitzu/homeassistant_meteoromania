@@ -63,6 +63,14 @@ NATIONWIDE_PATTERNS = [
     "întregul teritoriu",
 ]
 
+# When a warning gives its affected zones only as "conform textului și hărții"
+# (see the text and the map) instead of an explicit region/county list, the
+# situation is broad and cannot be localized from a keyword list — treat it as
+# relevant for every county so an area-wide alert is never filtered out.
+UNLOCALIZED_ZONE_MARKERS = [
+    "conform textului",
+]
+
 # Map Romanian weather phenomena to concise English labels for local summary.
 PHENOMENA_MAP = [
     (r"intensificări\s+(puternice\s+)?ale\s+vântului|vânt\s+puternic|vânt\b", "Strong wind"),

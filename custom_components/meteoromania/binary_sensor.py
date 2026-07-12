@@ -9,6 +9,7 @@ from .const import (
     DOMAIN,
     COUNTY_KEYWORDS,
     NATIONWIDE_PATTERNS,
+    UNLOCALIZED_ZONE_MARKERS,
     PHENOMENA_MAP,
     MONTH_NUM,
     COLOR_EMOJI,
@@ -96,6 +97,12 @@ def _warning_relevant(full_text: str, county: str) -> bool:
     # Nationwide patterns always match.
     for pat in NATIONWIDE_PATTERNS:
         if pat.lower() in text_lower:
+            return True
+
+    # Warnings whose affected zones are given only "conform textului si hartii"
+    # carry no explicit region list — include them for every county.
+    for marker in UNLOCALIZED_ZONE_MARKERS:
+        if marker.lower() in text_lower:
             return True
 
     # County-specific keywords.

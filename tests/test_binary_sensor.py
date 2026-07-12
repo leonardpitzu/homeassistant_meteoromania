@@ -186,6 +186,12 @@ def test_warning_relevant_nationwide():
     assert _warning_relevant("în toate regiunile", "Constanța") is True
 
 
+def test_warning_relevant_conform_textului():
+    # Broad "see the text and map" warnings carry no explicit county list and
+    # are relevant for every county.
+    assert _warning_relevant("Zone afectate: conform textului și hărții", "Brașov") is True
+
+
 def test_warning_not_relevant():
     assert _warning_relevant("în județele Botoșani, Iași", "Brașov") is False
 

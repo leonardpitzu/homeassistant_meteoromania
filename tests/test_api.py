@@ -121,7 +121,8 @@ async def test_fetch_alerts_single():
 
     alert = result["alert 1"]
     assert alert["type"] == "ATENȚIONARE METEOROLOGICĂ"
-    assert alert["color_code"] == "NECUNOSCUT"
+    # The alert rolls up to its most severe warning's colour (COD GALBEN here).
+    assert alert["color_code"] == "GALBEN"
     assert "url" not in alert
 
     warning = alert["warning 1"]
