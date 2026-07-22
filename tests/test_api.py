@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 from custom_components.meteoromania.api import (
     MeteoRomaniaApiClient,
     MeteoRomaniaApiError,
+    parse_county_codes,
 )
 
 
@@ -466,4 +467,69 @@ async def test_informare_groups_atentionari_as_warnings():
     w2 = alert["warning 2"]
     assert w2["color_code"] == "PORTOCALIU"
     assert w2["title"] == "instabilitate atmosferica"
+
+
+# ---------------------------------------------------------------------------
+# Per-county map SVG codes (authoritative relevance/severity)
+# ---------------------------------------------------------------------------
+
+SAMPLE_MAP_SVG = b"""\
+<svg xmlns="http://www.w3.org/2000/svg">
+<style>.cod1{fill:yellow}.cod3{fill:red}</style>
+<path data-judet="BV" data-denumire-judet="Bra\xc8\x99ov" class="judet cod1" d="M 1,1 2,2"/>
+<path data-judet="BV" data-denumire-judet="Bra\xc8\x99ov" data-tip="munti" class="munte cod3 BV_munte_1" d="M 3,3 4,4"/>
+<path data-judet="TL" data-denumire-judet="Tulcea" class="judet cod3" d="M 5,5 6,6"/>
+<path data-judet="CT" data-denumire-judet="Constan\xc8\x9ba" class="judet cod0" d="M 7,7 8,8"/>
+</svg>"""
+
+
+def test_parse_county_codes_base_judet_only():
+    """Base ``judet`` codes are read; relief overlays (munte/alt) are ignored."""
+    codes = parse_county_codes(SAMPLE_MAP_SVG)
+    assert codes["BV"] == 1  # lowland yellow, NOT the mountain's cod3
+    assert codes["TL"] == 3
+    assert codes["CT"] == 0
+
+
+def test_parse_county_codes_empty_on_garbage():
+    assert parse_county_codes(b"<html>no counties here</html>") == {}
+
+
+def _make_session_with_svg(xml_bytes: bytes, html_bytes: bytes, svg_bytes: bytes):
+    """Mock session that also serves an SVG for ``harta.svg.php`` requests."""
+    session = MagicMock()
+
+    def _get(url, **kwargs):
+        low = url.lower()
+        if "harta.svg.php" in low:
+            data = svg_bytes
+        elif "xml" in low:
+            data = xml_bytes
+        else:
+            data = html_bytes
+        resp = AsyncMock()
+        resp.raise_for_status = MagicMock()
+        resp.read = AsyncMock(return_value=data)
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=resp)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        return ctx
+
+    session.get = _get
+    return session
+
+
+async def test_fetch_alerts_attaches_county_codes():
+    """Each mapped target gets the authoritative per-county codes from its SVG."""
+    client = MeteoRomaniaApiClient(
+        _make_session_with_svg(
+            SAMPLE_XML_INFORMARE_WITH_WARNINGS, SAMPLE_HTML_ONE_MAP, SAMPLE_MAP_SVG
+        )
+    )
+    result = await client.fetch_alerts()
+
+    alert = result["alert 1"]
+    assert alert["county_codes"]["BV"] == 1
+    assert alert["county_codes"]["TL"] == 3
+
 

@@ -114,3 +114,57 @@ COLOR_RGB = {
     "ROSU":       {"r": 255, "g": 0,   "b": 0},
     "NECUNOSCUT": {"r": 200, "g": 200, "b": 200},
 }
+
+# ANM's per-alert map (``harta.svg.php``) is the authoritative per-county
+# severity source: each county is a ``<path data-judet="XX" class="judet codN">``
+# where the numeric ``codN`` on the base *județ* path is that county's warning
+# level. This is exact (issued by ANM itself), unlike the prose keyword filter
+# which over-includes broad macro-regions. See COUNTY_SVG_CODE / COD_COLOR.
+COD_COLOR = {1: "GALBEN", 2: "PORTOCALIU", 3: "ROSU"}
+
+# County name -> the 2-letter ``data-judet`` code used in the map SVG. Names are
+# byte-identical to COUNTY_KEYWORDS keys (and the SVG's ``data-denumire-judet``).
+COUNTY_SVG_CODE: dict[str, str] = {
+    "Alba": "AB",
+    "Arad": "AR",
+    "Argeș": "AG",
+    "Bacău": "BC",
+    "Bihor": "BH",
+    "Bistrița-Năsăud": "BN",
+    "Botoșani": "BT",
+    "Brașov": "BV",
+    "Brăila": "BR",
+    "București": "B",
+    "Buzău": "BZ",
+    "Călărași": "CL",
+    "Caraș-Severin": "CS",
+    "Cluj": "CJ",
+    "Constanța": "CT",
+    "Covasna": "CV",
+    "Dâmbovița": "DB",
+    "Dolj": "DJ",
+    "Galați": "GL",
+    "Giurgiu": "GR",
+    "Gorj": "GJ",
+    "Harghita": "HR",
+    "Hunedoara": "HD",
+    "Ialomița": "IL",
+    "Iași": "IS",
+    "Ilfov": "IF",
+    "Maramureș": "MM",
+    "Mehedinți": "MH",
+    "Mureș": "MS",
+    "Neamț": "NT",
+    "Olt": "OT",
+    "Prahova": "PH",
+    "Sălaj": "SJ",
+    "Satu Mare": "SM",
+    "Sibiu": "SB",
+    "Suceava": "SV",
+    "Teleorman": "TR",
+    "Timiș": "TM",
+    "Tulcea": "TL",
+    "Vâlcea": "VL",
+    "Vaslui": "VS",
+    "Vrancea": "VN",
+}

@@ -41,6 +41,44 @@ class MeteoRomaniaApiError(Exception):
     """Raised when alert data cannot be retrieved or parsed."""
 
 
+# ANM's per-alert map SVG colours each county authoritatively. The base county
+# path is ``<path data-judet="XX" ... class="judet codN">`` (cod0..cod3); relief
+# overlays are separate ``munte``/``alt###``/``litoral`` paths we deliberately
+# ignore so the value reflects the county lowland (the populated area).
+_SVG_PATH_RE = re.compile(r"<path\b[^>]*>")
+_SVG_JUDET_RE = re.compile(r'data-judet="([A-Z]{1,2})"')
+_SVG_CLASS_RE = re.compile(r'class="([^"]*)"')
+
+
+def parse_county_codes(svg: bytes) -> dict[str, int]:
+    """Extract each county's base *județ* warning code from an ANM map SVG.
+
+    Returns ``{judet_code: cod}`` with cod 0 (none/green), 1 (galben),
+    2 (portocaliu) or 3 (roșu), read from the base ``class="judet codN"`` path
+    of every county. This is ANM's own per-county colouring, so it is exact and
+    replaces the prose keyword heuristic for deciding local relevance/severity.
+    """
+    text = svg.decode("utf-8", "replace")
+    codes: dict[str, int] = {}
+    for tag in _SVG_PATH_RE.findall(text):
+        cls = _SVG_CLASS_RE.search(tag)
+        if not cls:
+            continue
+        tokens = cls.group(1).split()
+        if "judet" not in tokens:
+            continue
+        cod = next(
+            (int(t[3:]) for t in tokens if t.startswith("cod") and t[3:].isdigit()),
+            None,
+        )
+        if cod is None:
+            continue
+        jm = _SVG_JUDET_RE.search(tag)
+        if jm:
+            codes[jm.group(1)] = cod
+    return codes
+
+
 def _most_severe_color(warnings: list[dict]) -> str:
     """Return the most severe ``color_code`` among *warnings*.
 
@@ -58,6 +96,9 @@ def _most_severe_color(warnings: list[dict]) -> str:
 class MeteoRomaniaApiClient:
     def __init__(self, session: aiohttp.ClientSession):
         self._session = session
+        # url -> {judet_code: cod} cache; a given ``id_avertizare`` map is
+        # immutable, so this is reused across polls and pruned to live URLs.
+        self._svg_codes_cache: dict[str, dict[str, int]] = {}
 
     async def fetch_alerts(self):
         timeout = aiohttp.ClientTimeout(total=30, connect=10)
@@ -83,7 +124,55 @@ class MeteoRomaniaApiClient:
             )
             html_content = None
 
-        return self.parse(xml_content, html_content)
+        result = self.parse(xml_content, html_content)
+        await self._annotate_county_codes(result, timeout)
+        return result
+
+    async def _annotate_county_codes(self, result: dict, timeout) -> None:
+        """Attach ANM's authoritative per-county codes to each mapped target.
+
+        Every alert/warning that carries a ``harta.svg.php`` map URL gets a
+        ``county_codes`` dict (``{judet_code: cod}``) parsed from that map.
+        Best-effort: any fetch/parse failure simply leaves ``county_codes``
+        unset, and the sensor falls back to prose keyword matching.
+        """
+        targets: list[tuple[dict, str]] = []
+        for key, alert in result.items():
+            if not (key.startswith("alert ") and isinstance(alert, dict)):
+                continue
+            candidates = [alert] + [
+                alert[k] for k in alert if k.startswith("warning ")
+            ]
+            for target in candidates:
+                url = target.get("url")
+                if url and "harta.svg.php" in url:
+                    targets.append((target, url))
+
+        if not targets:
+            self._svg_codes_cache = {}
+            return
+
+        fresh: dict[str, dict[str, int]] = {}
+
+        async def resolve(url: str) -> None:
+            cached = self._svg_codes_cache.get(url)
+            if cached is not None:
+                fresh[url] = cached
+                return
+            try:
+                raw = await self._fetch(url, timeout)
+                fresh[url] = parse_county_codes(raw)
+            except Exception as err:  # noqa: BLE001 - map codes are best-effort
+                _LOGGER.warning("MeteoRomania map SVG unavailable (%s): %s", url, err)
+
+        await asyncio.gather(*(resolve(url) for url in {u for _, u in targets}))
+        # Prune the cache to only the maps still referenced this cycle.
+        self._svg_codes_cache = fresh
+
+        for target, url in targets:
+            codes = fresh.get(url)
+            if codes is not None:
+                target["county_codes"] = codes
 
     def parse(self, xml_content: bytes, html_content: bytes | None) -> dict:
         """Parse the raw XML/HTML feeds into the alert dict.
