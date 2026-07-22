@@ -8,7 +8,7 @@ from homeassistant.helpers.device_registry import DeviceInfo, DeviceEntryType
 from .const import (
     DOMAIN,
     COUNTY_KEYWORDS,
-    COUNTY_SVG_CODE,
+    COUNTY_CODE,
     COD_COLOR,
     NATIONWIDE_PATTERNS,
     UNLOCALIZED_ZONE_MARKERS,
@@ -178,19 +178,20 @@ def _build_local_alerts(data: dict, county: str) -> list[dict]:
     Each dict contains: icon, text, color, r, g, b. Warnings are sorted by
     severity (red > orange > yellow).
 
-    Relevance and severity come from ANM's own per-county map codes
-    (``county_codes`` attached to each alert/warning) whenever they are
-    available — that is authoritative and precise to the county. Only when the
-    map could not be fetched does it fall back to the prose keyword heuristic.
+    Relevance and severity come from ANM's own per-county codes
+    (``county_codes`` on each alert, from the feed's ``<judet>`` elements)
+    whenever they are available — that is authoritative and precise to the
+    county. Only when the feed omits them does it fall back to the prose
+    keyword heuristic.
     """
-    svg_code = COUNTY_SVG_CODE.get(county)
+    county_code = COUNTY_CODE.get(county)
     pairs: list[tuple[str, dict]] = []
     for alert_key in sorted(k for k in data if k.startswith("alert ") and isinstance(data[k], dict)):
         alert = data[alert_key]
         warnings = _iter_warnings(alert)
-        alert_pairs = _alert_svg_pairs(alert, warnings, svg_code) if svg_code else None
+        alert_pairs = _alert_map_pairs(alert, warnings, county_code) if county_code else None
         if alert_pairs is None:
-            # No authoritative map for this alert — degrade to prose matching.
+            # No authoritative codes for this alert — degrade to prose matching.
             alert_pairs = _alert_prose_pairs(warnings, county)
         pairs.extend(alert_pairs)
 
@@ -229,47 +230,37 @@ def _iter_warnings(alert: dict) -> list[dict]:
     return [alert[k] for k in sorted(alert) if k.startswith("warning ")]
 
 
-def _alert_svg_pairs(
-    alert: dict, warnings: list[dict], svg_code: str
+def _alert_map_pairs(
+    alert: dict, warnings: list[dict], county_code: str
 ) -> list[tuple[str, dict]] | None:
-    """Relevance/severity for one alert from ANM's per-county map codes.
+    """Relevance/severity for one alert from ANM's per-county codes.
 
     Returns ``(display_color, warning)`` pairs for the county (possibly empty if
     the county is not affected by this alert), or ``None`` if this alert carries
-    no ``county_codes`` at all (map unavailable) so the caller can fall back to
-    prose matching for it. Per-warning (individual) maps win over an alert-level
-    (shared) map when present.
+    no ``county_codes`` so the caller can fall back to prose matching for it.
     """
-    per_warning = [w for w in warnings if isinstance(w.get("county_codes"), dict)]
-    if per_warning:
-        return [
-            (COD_COLOR[cod], w)
-            for w in per_warning
-            if (cod := w["county_codes"].get(svg_code, 0)) > 0
-        ]
-
     alert_codes = alert.get("county_codes")
-    if isinstance(alert_codes, dict):
-        cod = alert_codes.get(svg_code, 0)
-        if cod == 0:
-            return []
-        color = COD_COLOR[cod]
-        # The shared map only gives the county's severity; use the warning(s) of
-        # that colour for the display text. If none match (rare — the county's
-        # max came from a block we can't colour-key), fall back to the single
-        # most-severe warning for the text while keeping the map's colour.
-        matches = [w for w in warnings if w.get("color_code") == color]
-        if matches:
-            return [(color, w) for w in matches]
-        if warnings:
-            best = min(
-                warnings,
-                key=lambda w: _SEVERITY_ORDER.get(w.get("color_code", ""), 3),
-            )
-            return [(color, best)]
-        return []
+    if not isinstance(alert_codes, dict):
+        return None
 
-    return None
+    cod = alert_codes.get(county_code, 0)
+    if cod == 0:
+        return []
+    color = COD_COLOR[cod]
+    # The per-county code only gives the county's severity; use the warning(s)
+    # of that colour for the display text. If none match (rare — the county's
+    # code came from a block we can't colour-key), fall back to the single
+    # most-severe warning for the text while keeping the authoritative colour.
+    matches = [w for w in warnings if w.get("color_code") == color]
+    if matches:
+        return [(color, w) for w in matches]
+    if warnings:
+        best = min(
+            warnings,
+            key=lambda w: _SEVERITY_ORDER.get(w.get("color_code", ""), 3),
+        )
+        return [(color, best)]
+    return []
 
 
 def _alert_prose_pairs(warnings: list[dict], county: str) -> list[tuple[str, dict]]:

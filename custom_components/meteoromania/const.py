@@ -115,16 +115,16 @@ COLOR_RGB = {
     "NECUNOSCUT": {"r": 200, "g": 200, "b": 200},
 }
 
-# ANM's per-alert map (``harta.svg.php``) is the authoritative per-county
-# severity source: each county is a ``<path data-judet="XX" class="judet codN">``
-# where the numeric ``codN`` on the base *județ* path is that county's warning
-# level. This is exact (issued by ANM itself), unlike the prose keyword filter
-# which over-includes broad macro-regions. See COUNTY_SVG_CODE / COD_COLOR.
+# ANM's feed carries the authoritative per-county severity directly: each
+# ``<avertizare>`` has ``<judet cod="XX" culoare="N"/>`` children where
+# ``culoare`` is 0 (none), 1 (galben), 2 (portocaliu) or 3 (roșu). That is
+# exact — unlike the prose keyword filter which over-includes broad
+# macro-regions. See COUNTY_CODE / COD_COLOR.
 COD_COLOR = {1: "GALBEN", 2: "PORTOCALIU", 3: "ROSU"}
 
-# County name -> the 2-letter ``data-judet`` code used in the map SVG. Names are
-# byte-identical to COUNTY_KEYWORDS keys (and the SVG's ``data-denumire-judet``).
-COUNTY_SVG_CODE: dict[str, str] = {
+# County name -> the 2-letter ``cod`` used in the feed's ``<judet>`` elements.
+# Names are byte-identical to COUNTY_KEYWORDS keys.
+COUNTY_CODE: dict[str, str] = {
     "Alba": "AB",
     "Arad": "AR",
     "Argeș": "AG",

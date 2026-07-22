@@ -226,13 +226,13 @@ def test_local_alerts_no_alerts():
 
 
 # ---------------------------------------------------------------------------
-# SVG map codes are authoritative: they override the prose keyword heuristic
+# ANM per-county codes are authoritative: they override the prose keyword heuristic
 # ---------------------------------------------------------------------------
 
-# Alert-level (shared) map: the whole alert carries one county_codes map. Prose
-# would pull warning 1 ("Transilvania") into Brașov, but ANM's map says Brașov
-# lowland is cod0 (nothing), so nothing is shown.
-MOCK_DATA_SVG_ALERT_LEVEL = {
+# Alert-level per-county codes (from the feed's <judet> elements). Prose would
+# pull warning 1 ("Transilvania") into Brașov, but ANM's codes say Brașov is
+# cod0 (nothing), so nothing is shown.
+MOCK_DATA_MAP_CODES = {
     "has_alerts": True,
     "alert_count": 1,
     "alert 1": {
@@ -255,63 +255,30 @@ MOCK_DATA_SVG_ALERT_LEVEL = {
 }
 
 
-def test_svg_codes_override_prose_brasov_not_affected():
-    """Prose would match 'Transilvania', but the map says Brașov = cod0 → none."""
-    alerts = _build_local_alerts(MOCK_DATA_SVG_ALERT_LEVEL, "Brașov")
+def test_map_codes_override_prose_brasov_not_affected():
+    """Prose would match 'Transilvania', but the codes say Brașov = cod0 → none."""
+    alerts = _build_local_alerts(MOCK_DATA_MAP_CODES, "Brașov")
     assert alerts == []
 
 
-def test_svg_codes_pick_matching_color_text():
+def test_map_codes_pick_matching_color_text():
     """Galați is cod2 (orange); the orange warning's text/colour are shown."""
-    alerts = _build_local_alerts(MOCK_DATA_SVG_ALERT_LEVEL, "Galați")
+    alerts = _build_local_alerts(MOCK_DATA_MAP_CODES, "Galați")
     assert len(alerts) == 1
     assert alerts[0]["color"] == "PORTOCALIU"
     assert alerts[0]["icon"] == "alert_orange"
     assert "Strong wind" in alerts[0]["text"]
 
 
-def test_svg_codes_severity_from_map_not_warning_color():
+def test_map_codes_severity_from_codes_not_warning_color():
     """Tulcea is cod3 (red) even though the alert's warnings are yellow/orange."""
-    alerts = _build_local_alerts(MOCK_DATA_SVG_ALERT_LEVEL, "Tulcea")
+    alerts = _build_local_alerts(MOCK_DATA_MAP_CODES, "Tulcea")
     assert len(alerts) == 1
     assert alerts[0]["color"] == "ROSU"
     assert alerts[0]["icon"] == "alert_red"
 
 
-# Per-warning (individual) maps take precedence over an alert-level map.
-MOCK_DATA_SVG_PER_WARNING = {
-    "has_alerts": True,
-    "alert_count": 1,
-    "alert 1": {
-        "type": "Avertizare",
-        "color_code": "PORTOCALIU",
-        "warning 1": {
-            "color_code": "GALBEN",
-            "interval": "22 aprilie, ora 10:00 – 24 aprilie, ora 10:00",
-            "title": "intensificări ale vântului",
-            "phenomena": "Zone afectate: Transilvania.",
-            "county_codes": {"BV": 1},
-        },
-        "warning 2": {
-            "color_code": "PORTOCALIU",
-            "interval": "23 aprilie, ora 12:00 – 23 aprilie, ora 20:00",
-            "title": "intensificări puternice ale vântului",
-            "phenomena": "în județele Galați.",
-            "county_codes": {"BV": 0},
-        },
-    },
-}
-
-
-def test_svg_per_warning_codes():
-    """Brașov gets only warning 1 (cod1), not warning 2 (cod0)."""
-    alerts = _build_local_alerts(MOCK_DATA_SVG_PER_WARNING, "Brașov")
-    assert len(alerts) == 1
-    assert alerts[0]["color"] == "GALBEN"
-    assert "Strong wind" in alerts[0]["text"]
-
-
-def test_svg_absent_falls_back_to_prose():
+def test_map_codes_absent_falls_back_to_prose():
     """With no county_codes anywhere, the prose keyword heuristic is used."""
     alerts = _build_local_alerts(MOCK_DATA_MULTI, "Brașov")
     # Same as the legacy prose behaviour: warnings 1 & 2 (Transilvania) match.
