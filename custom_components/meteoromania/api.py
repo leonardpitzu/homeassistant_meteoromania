@@ -79,6 +79,39 @@ def parse_county_codes(svg: bytes) -> dict[str, int]:
     return codes
 
 
+def iter_map_targets(result: dict) -> list[tuple[dict, str]]:
+    """Return ``(target, url)`` for every alert/warning carrying a map URL.
+
+    Shared by the async client and the standalone parser so both discover the
+    exact same map targets — the two can never drift on which alerts/warnings
+    get ``county_codes``.
+    """
+    targets: list[tuple[dict, str]] = []
+    for key, alert in result.items():
+        if not (key.startswith("alert ") and isinstance(alert, dict)):
+            continue
+        candidates = [alert] + [alert[k] for k in alert if k.startswith("warning ")]
+        for target in candidates:
+            url = target.get("url")
+            if url and "harta.svg.php" in url:
+                targets.append((target, url))
+    return targets
+
+
+def attach_county_codes(result: dict, codes_by_url: dict[str, dict[str, int]]) -> None:
+    """Attach parsed per-county codes to each mapped target, in place.
+
+    ``codes_by_url`` maps a map URL to its ``{judet_code: cod}`` dict. Targets
+    whose URL is absent (fetch/parse failed) are left without ``county_codes``,
+    so the sensor falls back to prose keyword matching for them.
+    """
+    for target, url in iter_map_targets(result):
+        codes = codes_by_url.get(url)
+        if codes is not None:
+            target["county_codes"] = codes
+
+
+
 def _most_severe_color(warnings: list[dict]) -> str:
     """Return the most severe ``color_code`` among *warnings*.
 
@@ -136,18 +169,7 @@ class MeteoRomaniaApiClient:
         Best-effort: any fetch/parse failure simply leaves ``county_codes``
         unset, and the sensor falls back to prose keyword matching.
         """
-        targets: list[tuple[dict, str]] = []
-        for key, alert in result.items():
-            if not (key.startswith("alert ") and isinstance(alert, dict)):
-                continue
-            candidates = [alert] + [
-                alert[k] for k in alert if k.startswith("warning ")
-            ]
-            for target in candidates:
-                url = target.get("url")
-                if url and "harta.svg.php" in url:
-                    targets.append((target, url))
-
+        targets = iter_map_targets(result)
         if not targets:
             self._svg_codes_cache = {}
             return
@@ -168,11 +190,8 @@ class MeteoRomaniaApiClient:
         await asyncio.gather(*(resolve(url) for url in {u for _, u in targets}))
         # Prune the cache to only the maps still referenced this cycle.
         self._svg_codes_cache = fresh
+        attach_county_codes(result, fresh)
 
-        for target, url in targets:
-            codes = fresh.get(url)
-            if codes is not None:
-                target["county_codes"] = codes
 
     def parse(self, xml_content: bytes, html_content: bytes | None) -> dict:
         """Parse the raw XML/HTML feeds into the alert dict.
