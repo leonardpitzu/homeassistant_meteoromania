@@ -4,9 +4,8 @@ This is a dev/debug helper, NOT part of the integration runtime. It fetches the
 live ANM feeds with ``requests`` and runs the *exact same* parsing code as the
 Home Assistant integration (``api.py``) by importing and calling
 ``MeteoRomaniaApiClient.parse``. There is a single parsing implementation, so
-running this script shows precisely the data the integration would expose
-(including the per-county ``county_codes``) and the two can never drift out of
-sync.
+running this script shows precisely the data the integration would expose,
+including the per-county ``county_codes`` and per-relief ``zone_codes``.
 
 Run it from this directory:
 
@@ -18,31 +17,27 @@ import sys
 
 import requests
 
-from api import HEADERS, URL_HTML, URL_XML, MeteoRomaniaApiClient
+from api import HEADERS, URL_XML, MeteoRomaniaApiClient
 
 
-def fetch_raw() -> tuple[bytes, bytes]:
-    """Fetch the XML and HTML feeds synchronously and return their bytes."""
-    xml = requests.get(URL_XML, headers=HEADERS, timeout=30)
-    xml.raise_for_status()
-    html = requests.get(URL_HTML, headers=HEADERS, timeout=30)
-    html.raise_for_status()
-    return xml.content, html.content
+def fetch_raw() -> bytes:
+    """Fetch the ANM XML feed synchronously and return its bytes."""
+    resp = requests.get(URL_XML, headers=HEADERS, timeout=30)
+    resp.raise_for_status()
+    return resp.content
 
 
 def parse_alerts() -> dict:
-    """Fetch the live feeds and parse them with the integration's own logic."""
-    xml_content, html_content = fetch_raw()
+    """Fetch the live feed and parse it with the integration's own logic."""
     # parse() needs no network session, so a None session is fine here.
     client = MeteoRomaniaApiClient(session=None)
-    return client.parse(xml_content, html_content)
+    return client.parse(fetch_raw())
 
 
 
 if __name__ == "__main__":
     if "--raw-xml" in sys.argv:
-        xml_content, _ = fetch_raw()
-        sys.stdout.buffer.write(xml_content)
+        sys.stdout.buffer.write(fetch_raw())
     else:
         from pprint import pprint
 

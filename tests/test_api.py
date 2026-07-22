@@ -63,40 +63,19 @@ SAMPLE_XML_SPLIT_INTERVAL = b"""\
 </avertizari>"""
 
 
-SAMPLE_HTML_ONE_MAP = b"""\
-<html><body>
-<div class="alerta_meteo_produse">
-  <img src="/avertizari/harta.svg.php?id=123" />
-</div>
-</body></html>"""
-
-SAMPLE_HTML_TWO_MAPS = b"""\
-<html><body>
-<div class="alerta_meteo_produse">
-  <img src="/avertizari/harta.svg.php?id=100" />
-</div>
-<div class="alerta_meteo_produse">
-  <img src="/avertizari/harta.svg.php?id=200" />
-</div>
-</body></html>"""
-
-SAMPLE_HTML_EMPTY = b"<html><body></body></html>"
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_session(xml_bytes: bytes, html_bytes: bytes):
-    """Build a mock ``aiohttp.ClientSession`` that returns canned responses."""
+def _make_session(xml_bytes: bytes, *_ignored):
+    """Build a mock ``aiohttp.ClientSession`` that serves the ANM XML feed."""
     session = MagicMock()
 
     def _get(url, **kwargs):
-        data = xml_bytes if "xml" in url.lower() else html_bytes
         resp = AsyncMock()
         resp.raise_for_status = MagicMock()
-        resp.read = AsyncMock(return_value=data)
+        resp.read = AsyncMock(return_value=xml_bytes)
         ctx = MagicMock()
         ctx.__aenter__ = AsyncMock(return_value=resp)
         ctx.__aexit__ = AsyncMock(return_value=False)
@@ -113,7 +92,7 @@ def _make_session(xml_bytes: bytes, html_bytes: bytes):
 
 async def test_fetch_alerts_single():
     """A header-less message collapses into a default alert with one warning."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT, SAMPLE_HTML_ONE_MAP))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT))
     result = await client.fetch_alerts()
 
     assert result["has_alerts"] is True
@@ -123,33 +102,27 @@ async def test_fetch_alerts_single():
     assert alert["type"] == "ATENȚIONARE METEOROLOGICĂ"
     # The alert rolls up to its most severe warning's colour (COD GALBEN here).
     assert alert["color_code"] == "GALBEN"
-    assert "url" not in alert
 
     warning = alert["warning 1"]
     assert warning["color_code"] == "GALBEN"
     assert "15 februarie" in warning["interval"]
     assert "intensificari" in warning["title"]
     assert "vantul" in warning["phenomena"]
-    assert "harta.svg.php" in warning["url"]
 
 
 async def test_fetch_alerts_multiple():
-    """Two <avertizare> elements become two separate alerts, one map each."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_TWO_ALERTS, SAMPLE_HTML_TWO_MAPS))
+    """Two <avertizare> elements become two separate alerts."""
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_TWO_ALERTS))
     result = await client.fetch_alerts()
 
     assert result["alert_count"] == 2
-    a1 = result["alert 1"]
-    a2 = result["alert 2"]
-    assert a1["warning 1"]["color_code"] == "GALBEN"
-    assert a2["warning 1"]["color_code"] == "PORTOCALIU"
-    assert "harta.svg.php?id=100" in a1["warning 1"]["url"]
-    assert "harta.svg.php?id=200" in a2["warning 1"]["url"]
+    assert result["alert 1"]["warning 1"]["color_code"] == "GALBEN"
+    assert result["alert 2"]["warning 1"]["color_code"] == "PORTOCALIU"
 
 
 async def test_fetch_alerts_empty():
     """No XML avertizare elements → has_alerts False, count 0."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_EMPTY, SAMPLE_HTML_EMPTY))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_EMPTY))
     result = await client.fetch_alerts()
 
     assert result["has_alerts"] is False
@@ -158,7 +131,7 @@ async def test_fetch_alerts_empty():
 
 async def test_fetch_alerts_red():
     """Red (rosu.png) image maps the warning to ROSU."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_RED_ALERT, SAMPLE_HTML_ONE_MAP))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_RED_ALERT))
     result = await client.fetch_alerts()
 
     assert result["alert 1"]["warning 1"]["color_code"] == "ROSU"
@@ -166,7 +139,7 @@ async def test_fetch_alerts_red():
 
 async def test_fetch_alerts_unknown_color():
     """Unknown culoare value with no image maps to NECUNOSCUT."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_UNKNOWN_COLOR, SAMPLE_HTML_EMPTY))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_UNKNOWN_COLOR))
     result = await client.fetch_alerts()
 
     assert result["alert 1"]["warning 1"]["color_code"] == "NECUNOSCUT"
@@ -174,7 +147,7 @@ async def test_fetch_alerts_unknown_color():
 
 async def test_fetch_alerts_split_interval():
     """A line-break-split interval is stitched, keeping the title/phenomena intact."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_SPLIT_INTERVAL, SAMPLE_HTML_EMPTY))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_SPLIT_INTERVAL))
     result = await client.fetch_alerts()
 
     warning = result["alert 1"]["warning 1"]
@@ -184,48 +157,6 @@ async def test_fetch_alerts_split_interval():
     assert warning["title"] == "val de caldura intens si persistent"
     assert "iulie, ora 12" not in warning.get("phenomena", "")
     assert "Zone afectate" in warning["phenomena"]
-
-
-async def test_html_url_absolute():
-    """Relative image URL is expanded to an absolute URL on the warning."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT, SAMPLE_HTML_ONE_MAP))
-    result = await client.fetch_alerts()
-
-    assert (
-        result["alert 1"]["warning 1"]["url"]
-        == "https://www.meteoromania.ro/avertizari/harta.svg.php?id=123"
-    )
-
-
-async def test_no_html_map():
-    """When HTML has no map image, the warning has no 'url' key."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT, SAMPLE_HTML_EMPTY))
-    result = await client.fetch_alerts()
-
-    assert "url" not in result["alert 1"]["warning 1"]
-
-
-SAMPLE_HTML_LEADING_MAPLESS = b"""\
-<html><body>
-<div class="alerta_meteo_produse"><p>intro, no map</p></div>
-<div class="alerta_meteo_produse">
-  <img src="/avertizari/harta.svg.php?id=100" />
-</div>
-<div class="alerta_meteo_produse">
-  <img src="/avertizari/harta.svg.php?id=200" />
-</div>
-</body></html>"""
-
-
-async def test_maps_keyed_by_map_order_not_block_position():
-    """A leading map-less block must not shift every map onto the wrong alert."""
-    client = MeteoRomaniaApiClient(
-        _make_session(SAMPLE_XML_TWO_ALERTS, SAMPLE_HTML_LEADING_MAPLESS)
-    )
-    result = await client.fetch_alerts()
-
-    assert "harta.svg.php?id=100" in result["alert 1"]["warning 1"]["url"]
-    assert "harta.svg.php?id=200" in result["alert 2"]["warning 1"]["url"]
 
 
 SAMPLE_XML_LONE_INFORMARE = (
@@ -238,17 +169,14 @@ SAMPLE_XML_LONE_INFORMARE = (
 ).encode("utf-8")
 
 
-async def test_map_attaches_to_lone_alert_stub():
-    """An alert with no warnings still receives its own map."""
-    client = MeteoRomaniaApiClient(
-        _make_session(SAMPLE_XML_LONE_INFORMARE, SAMPLE_HTML_ONE_MAP)
-    )
+async def test_lone_informare_has_no_warnings():
+    """An INFORMARE-only element becomes an alert with no warnings."""
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_LONE_INFORMARE))
     result = await client.fetch_alerts()
 
     alert = result["alert 1"]
     assert alert["type"] == "INFORMARE METEOROLOGICĂ"
     assert not any(key.startswith("warning ") for key in alert)
-    assert "harta.svg.php?id=123" in alert["url"]
 
 
 
@@ -269,40 +197,9 @@ async def test_network_error():
         await client.fetch_alerts()
 
 
-def _make_session_partial(xml_bytes: bytes, html_exc: Exception):
-    """Session where the XML request succeeds but the HTML request fails."""
-    session = MagicMock()
-
-    def _get(url, **kwargs):
-        ctx = MagicMock()
-        if "xml" in url.lower():
-            resp = AsyncMock()
-            resp.raise_for_status = MagicMock()
-            resp.read = AsyncMock(return_value=xml_bytes)
-            ctx.__aenter__ = AsyncMock(return_value=resp)
-        else:
-            ctx.__aenter__ = AsyncMock(side_effect=html_exc)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        return ctx
-
-    session.get = _get
-    return session
-
-
-async def test_html_failure_tolerated():
-    """A failing HTML page still yields XML alerts, just without map URLs."""
-    client = MeteoRomaniaApiClient(
-        _make_session_partial(SAMPLE_XML_ONE_ALERT, Exception("503 Service Unavailable"))
-    )
-    result = await client.fetch_alerts()
-
-    assert result["alert_count"] == 1
-    assert "url" not in result["alert 1"]["warning 1"]
-
-
 async def test_malformed_xml_raises():
     """Invalid XML surfaces as MeteoRomaniaApiError, not a raw parser error."""
-    client = MeteoRomaniaApiClient(_make_session(b"<not-valid-xml", SAMPLE_HTML_EMPTY))
+    client = MeteoRomaniaApiClient(_make_session(b"<not-valid-xml"))
 
     with pytest.raises(MeteoRomaniaApiError):
         await client.fetch_alerts()
@@ -364,7 +261,7 @@ SAMPLE_XML_AVERTIZARE_BOUNDARY = b"""\
 
 async def test_avertizare_boundary_not_in_phenomena():
     """AVERTIZARE METEOROLOGICA must not bleed into the previous warning."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_AVERTIZARE_BOUNDARY, SAMPLE_HTML_EMPTY))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_AVERTIZARE_BOUNDARY))
     result = await client.fetch_alerts()
 
     w1 = result["alert 1"]["warning 1"]
@@ -384,7 +281,7 @@ SAMPLE_XML_FENOMENE_SPLIT = b"""\
 
 async def test_fenomene_split_line_title():
     """When 'Fenomene vizate:' has no content after colon, next line becomes title."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_FENOMENE_SPLIT, SAMPLE_HTML_EMPTY))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_FENOMENE_SPLIT))
     result = await client.fetch_alerts()
 
     w = result["alert 1"]["warning 1"]
@@ -402,7 +299,7 @@ SAMPLE_XML_FENOMEN_VARIANT = b"""\
 
 async def test_fenomen_variant_matched():
     """'Fenomen vizate' (without final 'e') is handled like 'Fenomene vizate'."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_FENOMEN_VARIANT, SAMPLE_HTML_EMPTY))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_FENOMEN_VARIANT))
     result = await client.fetch_alerts()
 
     w = result["alert 1"]["warning 1"]
@@ -419,7 +316,7 @@ SAMPLE_XML_INTERVAL_SPLIT = b"""\
 
 async def test_interval_split_line():
     """A bare 'Interval de valabilitate:' adopts the date from the next line."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_INTERVAL_SPLIT, SAMPLE_HTML_EMPTY))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_INTERVAL_SPLIT))
     result = await client.fetch_alerts()
 
     w = result["alert 1"]["warning 1"]
@@ -445,9 +342,7 @@ SAMPLE_XML_INFORMARE_WITH_WARNINGS = (
 
 async def test_informare_groups_atentionari_as_warnings():
     """Within one element, INFORMARE is the header and the CODs are its warnings."""
-    client = MeteoRomaniaApiClient(
-        _make_session(SAMPLE_XML_INFORMARE_WITH_WARNINGS, SAMPLE_HTML_ONE_MAP)
-    )
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_INFORMARE_WITH_WARNINGS))
     result = await client.fetch_alerts()
 
     assert result["alert_count"] == 1
@@ -456,8 +351,6 @@ async def test_informare_groups_atentionari_as_warnings():
     assert alert["color_code"] == "NECUNOSCUT"
     assert "1 mai" in alert["interval"]
     assert alert["title"] == "vreme calduroasa"
-    # One map for the whole alert (fewer maps than warnings), shared by both.
-    assert "harta.svg.php?id=123" in alert["url"]
 
     w1 = alert["warning 1"]
     assert w1["color_code"] == "GALBEN"
@@ -489,18 +382,10 @@ SAMPLE_XML_WITH_JUDETE = (
 </avertizari>"""
 ).encode("utf-8")
 
-# HTML whose map URL uses the real ``id_avertizare`` query parameter.
-SAMPLE_HTML_ID_AVERTIZARE = b"""\
-<html><body>
-<div class="alerta_meteo_produse">
-  <img src="/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare=4198" />
-</div>
-</body></html>"""
-
 
 async def test_fetch_alerts_attaches_county_codes_from_judete():
     """<judet> children are parsed into the alert's authoritative county_codes."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_WITH_JUDETE, SAMPLE_HTML_ONE_MAP))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_WITH_JUDETE))
     result = await client.fetch_alerts()
 
     codes = result["alert 1"]["county_codes"]
@@ -509,30 +394,15 @@ async def test_fetch_alerts_attaches_county_codes_from_judete():
 
 async def test_fetch_alerts_parses_relief_zones_nonzero_only():
     """<zona> children give per-relief codes; only non-zero are kept."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_WITH_JUDETE, SAMPLE_HTML_ONE_MAP))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_WITH_JUDETE))
     result = await client.fetch_alerts()
 
     assert result["alert 1"]["zone_codes"] == {"BV_munte_1": 1}
 
 
-async def test_fetch_alerts_captures_id_and_rewrites_map_url():
-    """id_avertizare is captured and the map URL points at the local endpoint."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_WITH_JUDETE, SAMPLE_HTML_ID_AVERTIZARE))
-    result = await client.fetch_alerts()
-
-    alert = result["alert 1"]
-    assert alert["id_avertizare"] == "4198"
-    # The map URL (on the alert or its warning) now targets the local endpoint.
-    urls = [alert.get("url")] + [
-        alert[k].get("url") for k in alert if k.startswith("warning ")
-    ]
-    assert "/api/meteoromania/map/4198" in urls
-    assert not any("harta.svg.php" in (u or "") for u in urls)
-
-
 async def test_fetch_alerts_no_county_codes_when_no_judete():
     """An alert without <judet> children carries no county_codes key."""
-    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT, SAMPLE_HTML_ONE_MAP))
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_ONE_ALERT))
     result = await client.fetch_alerts()
 
     assert "county_codes" not in result["alert 1"]

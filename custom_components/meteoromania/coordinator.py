@@ -8,6 +8,7 @@ from homeassistant.util.dt import utcnow
 
 from .const import DOMAIN
 from .api import MeteoRomaniaApiClient
+from .map import apply_map_urls
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,5 +35,6 @@ class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
             data = await self.api.fetch_alerts()
         except Exception as err:
             raise UpdateFailed(f"Error fetching MeteoRomania data: {err}") from err
+        apply_map_urls(self.hass, data)
         self.last_updated = utcnow().isoformat()
         return data

@@ -24,7 +24,9 @@ The entity exposes **detailed attributes** for every active alert:
 | `alert N -> warning M -> interval` | Validity interval of the warning |
 | `alert N -> warning M -> title` | Headline phenomena for each warning inside the alert |
 | `alert N -> warning M -> phenomena` | Full description of weather phenomena (optional) |
-| `alert N -> url` | Link to the SVG alert map on meteoromania.ro (per-alert or per-warning) |
+| `alert N -> url` | HA-served, signed URL of the alert map, generated locally (see [Warning maps](#warning-maps)) |
+| `alert N -> county_codes` | ANM's authoritative per-county severity (`{county: 0-3}`, from the feed's `<judet>`) |
+| `alert N -> zone_codes` | ANM's per-relief/mountain severity (`{zone: 1-3}`, from the feed's `<zona>`) |
 | `local_alerts` | List of per-warning dicts with `icon`, `text`, `color`, `r`, `g`, `b` (only when a county is configured) |
 | `local_summary` | Concise, region-filtered summary string (only when a county is configured) |
 | `last_updated` | ISO timestamp of the most recent successful poll |
@@ -41,7 +43,7 @@ alert 1:
     interval: 22 februarie, ora 10:00 - 23 februarie, ora 06:00
     title: ninsori viscolite, strat de zăpadă
     phenomena: Se vor semnala ninsori abundente...
-  url: https://www.meteoromania.ro/harta.svg.php?...
+  url: /api/meteoromania/map/1?authSig=...
 ```
 
 > Plain warnings (without a national *informare*) come through as
@@ -50,6 +52,19 @@ alert 1:
 > `phenomena`, `url`) - a missing-key subscript makes a Markdown card render blank.
 
 Data is polled every **60 minutes**.
+
+### Warning maps
+
+Each alert exposes a `url` pointing to its colour-coded map of Romania. These
+maps are **generated locally** — the integration ships the country outline
+(counties + mountains) as a small template and recolours it from the
+authoritative `county_codes` / `zone_codes` in the same XML feed it already
+fetches. Nothing downloads ANM's multi-megabyte map per dashboard render.
+
+The maps are served by Home Assistant itself at `/api/meteoromania/map/<n>` and
+the `url` is **signed** (short-lived token), so a plain dashboard `<img>` can
+load it while the endpoint stays authenticated. Drop `url` into a Markdown or
+Picture card as-is.
 
 ## Installation
 
