@@ -483,9 +483,19 @@ SAMPLE_XML_WITH_JUDETE = (
     <judet cod="BV" culoare="0" useCoordGis="true"/>
     <judet cod="GL" culoare="2" useCoordGis="true"/>
     <judet cod="TL" culoare="3" useCoordGis="true"/>
+    <zona cod="BV_munte_1" culoare="1" useCoordGis="true"/>
+    <zona cod="BV_depresiune" culoare="0" useCoordGis="true"/>
   </avertizare>
 </avertizari>"""
 ).encode("utf-8")
+
+# HTML whose map URL uses the real ``id_avertizare`` query parameter.
+SAMPLE_HTML_ID_AVERTIZARE = b"""\
+<html><body>
+<div class="alerta_meteo_produse">
+  <img src="/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare=4198" />
+</div>
+</body></html>"""
 
 
 async def test_fetch_alerts_attaches_county_codes_from_judete():
@@ -495,6 +505,29 @@ async def test_fetch_alerts_attaches_county_codes_from_judete():
 
     codes = result["alert 1"]["county_codes"]
     assert codes == {"BV": 0, "GL": 2, "TL": 3}
+
+
+async def test_fetch_alerts_parses_relief_zones_nonzero_only():
+    """<zona> children give per-relief codes; only non-zero are kept."""
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_WITH_JUDETE, SAMPLE_HTML_ONE_MAP))
+    result = await client.fetch_alerts()
+
+    assert result["alert 1"]["zone_codes"] == {"BV_munte_1": 1}
+
+
+async def test_fetch_alerts_captures_id_and_rewrites_map_url():
+    """id_avertizare is captured and the map URL points at the local endpoint."""
+    client = MeteoRomaniaApiClient(_make_session(SAMPLE_XML_WITH_JUDETE, SAMPLE_HTML_ID_AVERTIZARE))
+    result = await client.fetch_alerts()
+
+    alert = result["alert 1"]
+    assert alert["id_avertizare"] == "4198"
+    # The map URL (on the alert or its warning) now targets the local endpoint.
+    urls = [alert.get("url")] + [
+        alert[k].get("url") for k in alert if k.startswith("warning ")
+    ]
+    assert "/api/meteoromania/map/4198" in urls
+    assert not any("harta.svg.php" in (u or "") for u in urls)
 
 
 async def test_fetch_alerts_no_county_codes_when_no_judete():

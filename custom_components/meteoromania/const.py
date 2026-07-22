@@ -5,6 +5,9 @@ CONF_COUNTY = 'county'
 
 PLATFORMS = [Platform.BINARY_SENSOR]
 
+# Base path of the local endpoint that serves the recoloured warning maps.
+MAP_URL_BASE = "/api/meteoromania/map"
+
 # Romanian counties mapped to region keywords used in ANM weather warnings.
 # Each entry: county name -> list of terms that, when found in a warning's text,
 # indicate the warning is relevant for that county.

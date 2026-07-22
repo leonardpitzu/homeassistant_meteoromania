@@ -9,6 +9,8 @@ from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET
 from defusedxml.common import DefusedXmlException
 
+from .const import MAP_URL_BASE
+
 _LOGGER = logging.getLogger(__name__)
 
 URL_HTML = "https://www.meteoromania.ro/avertizari/"
@@ -18,6 +20,9 @@ BASE_URL = "https://www.meteoromania.ro"
 
 # Numeric ``culoare`` attribute -> colour name.
 _COLOR_BY_CULOARE = {"0": "GALBEN", "1": "PORTOCALIU", "2": "ROSU"}
+
+# Extracts the alert id from a ``harta.svg.php?id_avertizare=NNNN`` map URL.
+_ID_AVERTIZARE_RE = re.compile(r"id_avertizare=(\d+)")
 
 # Warning colour severity, most severe first, for rolling warnings up to their alert.
 _COLOR_SEVERITY = {"ROSU": 3, "PORTOCALIU": 2, "GALBEN": 1, "NECUNOSCUT": 0}
@@ -56,6 +61,43 @@ def _parse_judete(element) -> dict[str, int]:
         if cod and culoare.isdigit():
             codes[cod] = int(culoare)
     return codes
+
+
+def _parse_zone(element) -> dict[str, int]:
+    """Extract per-relief-zone codes from an ``<avertizare>``.
+
+    ANM colours mountains/relief separately from the county lowland via
+    ``<zona cod="XX_munte_1" culoare="N"/>`` children, whose ``cod`` matches the
+    map's relief path ids. Returns ``{zone_id: culoare}`` (only non-zero kept).
+    """
+    codes: dict[str, int] = {}
+    for zona in element.findall("zona"):
+        cod = zona.attrib.get("cod")
+        culoare = zona.attrib.get("culoare", "")
+        if cod and culoare.isdigit() and int(culoare) > 0:
+            codes[cod] = int(culoare)
+    return codes
+
+
+def _rewrite_map_urls(result: dict) -> None:
+    """Point every alert/warning map URL at the local recolouring endpoint.
+
+    Done only in the live integration (not in pure ``parse()``), so the browser
+    loads locally-generated maps from ``MAP_URL_BASE/<id>`` instead of fetching
+    ANM's ~4.7MB SVG remotely on every render. The standalone parser keeps the
+    original remote URLs.
+    """
+    for key, alert in result.items():
+        if not (key.startswith("alert ") and isinstance(alert, dict)):
+            continue
+        map_id = alert.get("id_avertizare")
+        if not map_id:
+            continue
+        local = f"{MAP_URL_BASE}/{map_id}"
+        for target in [alert] + [alert[k] for k in alert if k.startswith("warning ")]:
+            if "harta.svg.php" in (target.get("url") or ""):
+                target["url"] = local
+
 
 
 def _most_severe_color(warnings: list[dict]) -> str:
@@ -100,7 +142,9 @@ class MeteoRomaniaApiClient:
             )
             html_content = None
 
-        return self.parse(xml_content, html_content)
+        result = self.parse(xml_content, html_content)
+        _rewrite_map_urls(result)
+        return result
 
     def parse(self, xml_content: bytes, html_content: bytes | None) -> dict:
         """Parse the raw XML/HTML feeds into the alert dict.
@@ -140,10 +184,14 @@ class MeteoRomaniaApiClient:
                 continue
             alert_idx += 1
             alert = self._build_alert(blocks)
-            # ANM's authoritative per-county codes ride along as <judet> children.
+            # ANM's authoritative per-county (and per-relief) codes ride along as
+            # <judet>/<zona> children — used for local relevance and map colouring.
             county_codes = _parse_judete(element)
             if county_codes:
                 alert["county_codes"] = county_codes
+            zone_codes = _parse_zone(element)
+            if zone_codes:
+                alert["zone_codes"] = zone_codes
             alerts[f"alert {alert_idx}"] = alert
 
         if html_content is not None:
@@ -328,6 +376,18 @@ class MeteoRomaniaApiClient:
 
         for target, url in zip(targets, urls, strict=False):
             target["url"] = url
+
+        # Record each alert's map id (from its own or a warning's URL) so the
+        # local map endpoint can look the alert up by id_avertizare.
+        for alert in alert_list:
+            candidate_urls = [alert.get("url")] + [
+                alert[k].get("url") for k in alert if k.startswith("warning ")
+            ]
+            for url in candidate_urls:
+                match = url and _ID_AVERTIZARE_RE.search(url)
+                if match:
+                    alert["id_avertizare"] = match.group(1)
+                    break
 
 
     def _extract_lines(self, html):
