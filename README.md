@@ -66,6 +66,13 @@ the `url` is **signed** (short-lived token), so a plain dashboard `<img>` can
 load it while the endpoint stays authenticated. Drop `url` into a Markdown or
 Picture card as-is.
 
+Responses are **gzip-compressed** (~4.7 MB SVG → ~120 KB on the wire), rendered
+once and cached per colouring, and browser-cacheable. The signed `url` is
+**reused across polls** while the alert's colours are unchanged, so quiet
+weather does not churn the sensor's recorded history. If you would rather keep
+the verbose alert attributes out of long-term history entirely, exclude the
+entity in your `recorder:` config.
+
 ## Installation
 
 ### HACS (recommended)

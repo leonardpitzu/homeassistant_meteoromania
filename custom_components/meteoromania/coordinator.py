@@ -35,6 +35,8 @@ class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
             data = await self.api.fetch_alerts()
         except Exception as err:
             raise UpdateFailed(f"Error fetching MeteoRomania data: {err}") from err
-        apply_map_urls(self.hass, data)
+        # Reuse still-fresh signed map URLs from the previous poll when the
+        # colouring is unchanged, so quiet weather does not churn recorded state.
+        apply_map_urls(self.hass, data, previous=self.data)
         self.last_updated = utcnow().isoformat()
         return data
