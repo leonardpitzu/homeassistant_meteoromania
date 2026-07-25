@@ -187,8 +187,13 @@ class MeteoRomaniaMapView(HomeAssistantView):
         if alert is None:
             return web.Response(status=404, text="Unknown alert")
 
-        etag, gz = render_map_gz(
-            alert.get("county_codes", {}), alert.get("zone_codes", {})
+        # Off-load to the executor: the first render reads the gzipped template
+        # from disk and every miss recolours + gzips a ~4.7MB SVG — both are
+        # blocking/CPU-heavy and must not run in the event loop.
+        etag, gz = await hass.async_add_executor_job(
+            render_map_gz,
+            alert.get("county_codes", {}),
+            alert.get("zone_codes", {}),
         )
         quoted_etag = f'"{etag}"'
         cache_headers = {
