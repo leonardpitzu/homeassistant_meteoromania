@@ -2,6 +2,7 @@ import logging
 import re
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.const import MATCH_ALL
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo, DeviceEntryType
 
@@ -31,11 +32,19 @@ class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
     _attr_has_entity_name = True
     _attr_name = None
     _attr_icon = "mdi:alert"
+    # The full nationwide alert tree (plus per-county/relief code dicts and the
+    # signed map URLs) is large and only useful live for the dashboard card;
+    # keep it out of the recorder so history stores just the on/off state.
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     def __init__(self, coordinator: MeteoRomaniaDataUpdateCoordinator, entry_id: str):
         super().__init__(coordinator)
         self._entry_id = entry_id
         self._attr_unique_id = f"{entry_id}_alert"
+        # Cache the (regex-heavy) attribute build for one coordinator update —
+        # HA reads extra_state_attributes several times per update.
+        self._attrs_cache_key: object = object()
+        self._attrs_cache: dict = {}
 
     @property
     def is_on(self):
@@ -43,17 +52,26 @@ class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self):
-        if not self.coordinator.data:
-            return {"last_updated": self.coordinator.last_updated}
-        attrs = {
-            **self.coordinator.data,
-            "last_updated": self.coordinator.last_updated,
-        }
-        county = self.coordinator.county
-        if county:
-            alerts_list = _build_local_alerts(self.coordinator.data, county)
-            attrs["local_alerts"] = alerts_list
-            attrs["local_summary"] = _format_local_summary(alerts_list)
+        cache_key = (self.coordinator.last_updated, self.coordinator.county)
+        if cache_key == self._attrs_cache_key:
+            return self._attrs_cache
+
+        data = self.coordinator.data
+        if not data:
+            attrs = {"last_updated": self.coordinator.last_updated}
+        else:
+            attrs = {
+                **data,
+                "last_updated": self.coordinator.last_updated,
+            }
+            county = self.coordinator.county
+            if county:
+                alerts_list = _build_local_alerts(data, county)
+                attrs["local_alerts"] = alerts_list
+                attrs["local_summary"] = _format_local_summary(alerts_list)
+
+        self._attrs_cache_key = cache_key
+        self._attrs_cache = attrs
         return attrs
 
     @property
@@ -186,7 +204,11 @@ def _build_local_alerts(data: dict, county: str) -> list[dict]:
     """
     county_code = COUNTY_CODE.get(county)
     pairs: list[tuple[str, dict]] = []
-    for alert_key in sorted(k for k in data if k.startswith("alert ") and isinstance(data[k], dict)):
+    alert_keys = sorted(
+        (k for k in data if k.startswith("alert ") and isinstance(data[k], dict)),
+        key=_key_index,
+    )
+    for alert_key in alert_keys:
         alert = data[alert_key]
         warnings = _iter_warnings(alert)
         alert_pairs = _alert_map_pairs(alert, warnings, county_code) if county_code else None
@@ -225,9 +247,22 @@ def _build_local_alerts(data: dict, county: str) -> list[dict]:
     return results
 
 
+def _key_index(key: str) -> int:
+    """Trailing integer of a ``"<name> <n>"`` key, for natural ordering."""
+    try:
+        return int(key.rsplit(" ", 1)[1])
+    except (IndexError, ValueError):
+        return 0
+
+
 def _iter_warnings(alert: dict) -> list[dict]:
     """Return an alert's warning dicts in document order."""
-    return [alert[k] for k in sorted(alert) if k.startswith("warning ")]
+    return [
+        alert[k]
+        for k in sorted(
+            (k for k in alert if k.startswith("warning ")), key=_key_index
+        )
+    ]
 
 
 def _alert_map_pairs(
