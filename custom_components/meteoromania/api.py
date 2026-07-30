@@ -74,9 +74,10 @@ def _parse_zone(element) -> dict[str, int]:
 def _most_severe_color(warnings: list[dict]) -> str:
     """Return the most severe ``color_code`` among *warnings*.
 
-    An ATENȚIONARE alert has no COD colour of its own; the public page shows it
-    with the colour of its highest-severity warning (e.g. "COD GALBEN"). Roll
-    the warnings up the same way so the alert-level ``color_code`` matches.
+    No alert carries a COD colour of its own — not even one opened by an
+    INFORMARE header, whose block is an uncoloured preamble. ANM shows an alert
+    with the colour of its highest-severity warning, so roll the warnings up the
+    same way for the alert-level ``color_code``.
     """
     return max(
         (w.get("color_code", "NECUNOSCUT") for w in warnings),
@@ -244,16 +245,18 @@ class MeteoRomaniaApiClient:
         An "informare" block, if present, supplies the alert's own header
         (type ``INFORMARE METEOROLOGICĂ`` with its interval/title/phenomena);
         otherwise the alert is a plain ``ATENȚIONARE METEOROLOGICĂ``. Every
-        "atentionare" block becomes a numbered warning under the alert.
+        "atentionare" block becomes a numbered warning under the alert, and the
+        alert's severity is that of its most severe warning.
         """
         informare = next((b for b in blocks if b["kind"] == "informare"), None)
         warnings = [b for b in blocks if b["kind"] != "informare"]
+        color_code = _most_severe_color(warnings)
 
         if informare is not None:
             alert = {
                 "type": "INFORMARE METEOROLOGICĂ",
                 "interval": informare["interval"],
-                "color_code": informare["color_code"],
+                "color_code": color_code,
             }
             if informare.get("title"):
                 alert["title"] = informare["title"]
@@ -262,7 +265,7 @@ class MeteoRomaniaApiClient:
         else:
             alert = {
                 "type": "ATENȚIONARE METEOROLOGICĂ",
-                "color_code": _most_severe_color(warnings),
+                "color_code": color_code,
             }
 
         for idx, block in enumerate(warnings, start=1):

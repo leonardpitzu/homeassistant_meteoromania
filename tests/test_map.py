@@ -8,6 +8,7 @@ import time
 
 from custom_components.meteoromania.map import (
     _url_fresh,
+    apply_map_urls,
     render_map,
     render_map_gz,
 )
@@ -72,3 +73,24 @@ def test_url_fresh_false_when_near_expiry():
 def test_url_fresh_false_on_garbage():
     assert _url_fresh("/api/meteoromania/map/1") is False
     assert _url_fresh("not a url") is False
+
+
+def test_apply_map_urls_gives_every_warning_the_alert_map(monkeypatch):
+    """ANM ships one map per alert — repeat it on each warning."""
+    monkeypatch.setattr(
+        "custom_components.meteoromania.map.async_sign_path",
+        lambda hass, path, expiry: f"{path}?authSig=t",
+    )
+    data = {
+        "alert 1": {
+            "color_code": "PORTOCALIU",
+            "warning 1": {"color_code": "GALBEN"},
+            "warning 2": {"color_code": "PORTOCALIU"},
+        }
+    }
+    apply_map_urls(None, data)
+
+    alert = data["alert 1"]
+    assert alert["url"] == "/api/meteoromania/map/1?authSig=t"
+    assert alert["warning 1"]["url"] == alert["url"]
+    assert alert["warning 2"]["url"] == alert["url"]

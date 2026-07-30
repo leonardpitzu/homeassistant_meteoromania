@@ -348,7 +348,8 @@ async def test_informare_groups_atentionari_as_warnings():
     assert result["alert_count"] == 1
     alert = result["alert 1"]
     assert alert["type"] == "INFORMARE METEOROLOGICĂ"
-    assert alert["color_code"] == "NECUNOSCUT"
+    # The alert takes the colour of its most severe warning.
+    assert alert["color_code"] == "PORTOCALIU"
     assert "1 mai" in alert["interval"]
     assert alert["title"] == "vreme calduroasa"
 

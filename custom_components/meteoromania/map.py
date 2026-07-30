@@ -136,6 +136,10 @@ def apply_map_urls(hass: HomeAssistant, data: dict, previous: dict | None = None
     recorded history, a still-fresh URL from the previous poll is reused as long
     as that alert's colours are unchanged. Best-effort: if signing is
     unavailable (e.g. the http component is not ready) the alert gets no URL.
+
+    ANM publishes a single map per alert, painted with every warning's colours
+    at once; the same URL is repeated on each warning so a dashboard can show a
+    map beside every one of them.
     """
     previous = previous or {}
     for key, alert in data.items():
@@ -149,15 +153,20 @@ def apply_map_urls(hass: HomeAssistant, data: dict, previous: dict | None = None
             and prev.get("zone_codes") == alert.get("zone_codes")
             and _url_fresh(prev["url"])
         ):
-            alert["url"] = prev["url"]
-            continue
-        index = key.split(" ", 1)[1]
-        try:
-            alert["url"] = async_sign_path(
-                hass, f"{MAP_URL_BASE}/{index}", MAP_URL_EXPIRY
-            )
-        except Exception as err:  # noqa: BLE001 - signing is a best-effort UI aid
-            _LOGGER.debug("Could not sign map URL for %s: %s", key, err)
+            url = prev["url"]
+        else:
+            index = key.split(" ", 1)[1]
+            try:
+                url = async_sign_path(
+                    hass, f"{MAP_URL_BASE}/{index}", MAP_URL_EXPIRY
+                )
+            except Exception as err:  # noqa: BLE001 - signing is a best-effort UI aid
+                _LOGGER.debug("Could not sign map URL for %s: %s", key, err)
+                continue
+        alert["url"] = url
+        for warning_key, warning in alert.items():
+            if warning_key.startswith("warning ") and isinstance(warning, dict):
+                warning["url"] = url
 
 
 def _find_alert(hass: HomeAssistant, index: str) -> dict | None:

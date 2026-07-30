@@ -17,13 +17,14 @@ The entity exposes **detailed attributes** for every active alert:
 | `has_alerts` | Whether any alerts are currently active |
 | `alert_count` | Total number of active alerts |
 | `alert N -> type` | Alert type - `INFORMARE METEOROLOGICĂ` or `ATENȚIONARE METEOROLOGICĂ` |
-| `alert N -> color_code` | Alert severity - `GALBEN`, `PORTOCALIU`, `ROSU`, or `NECUNOSCUT` |
+| `alert N -> color_code` | Alert severity - the most severe of its warnings (`GALBEN`, `PORTOCALIU`, `ROSU`, or `NECUNOSCUT`) |
 | `alert N -> interval` | Validity interval (present on `INFORMARE` alerts) |
 | `alert N -> title` | Headline of the alert (present on `INFORMARE` alerts) |
 | `alert N -> warning M -> color_code` | Severity of the individual warning |
 | `alert N -> warning M -> interval` | Validity interval of the warning |
 | `alert N -> warning M -> title` | Headline phenomena for each warning inside the alert |
 | `alert N -> warning M -> phenomena` | Full description of weather phenomena (optional) |
+| `alert N -> warning M -> url` | Map URL of the parent alert, repeated so every warning can show one |
 | `alert N -> url` | HA-served, signed URL of the alert map, generated locally (see [Warning maps](#warning-maps)) |
 | `alert N -> county_codes` | ANM's authoritative per-county severity (`{county: 0-3}`, from the feed's `<judet>`) |
 | `alert N -> zone_codes` | ANM's per-relief/mountain severity (`{zone: 1-3}`, from the feed's `<zona>`) |
@@ -43,6 +44,7 @@ alert 1:
     interval: 22 februarie, ora 10:00 - 23 februarie, ora 06:00
     title: ninsori viscolite, strat de zăpadă
     phenomena: Se vor semnala ninsori abundente...
+    url: /api/meteoromania/map/1?authSig=...
   url: /api/meteoromania/map/1?authSig=...
 ```
 
