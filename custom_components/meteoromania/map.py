@@ -26,7 +26,6 @@ from datetime import timedelta
 from pathlib import Path
 
 from aiohttp import web
-
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant
@@ -176,8 +175,8 @@ def apply_map_urls(hass: HomeAssistant, data: dict) -> None:
 
 def _find_codes(hass: HomeAssistant, etag: str) -> tuple[dict, dict] | None:
     """Return the ``(county_codes, zone_codes)`` an *etag* was minted from."""
-    for coordinator in hass.data.get(DOMAIN, {}).values():
-        data = getattr(coordinator, "data", None) or {}
+    for entry in hass.config_entries.async_loaded_entries(DOMAIN):
+        data = getattr(entry.runtime_data, "data", None) or {}
         for key, alert in data.items():
             if not (key.startswith("alert ") and isinstance(alert, dict)):
                 continue

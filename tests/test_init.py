@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.meteoromania.const import DOMAIN
@@ -34,8 +35,8 @@ async def test_setup_entry(hass):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-    assert DOMAIN in hass.data
-    assert entry.entry_id in hass.data[DOMAIN]
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data.data == MOCK_DATA
 
 
 async def test_unload_entry(hass):
@@ -51,7 +52,8 @@ async def test_unload_entry(hass):
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.entry_id not in hass.data.get(DOMAIN, {})
+    assert entry.state is ConfigEntryState.NOT_LOADED
+    assert not hasattr(entry, "runtime_data")
 
 
 async def test_setup_entry_api_failure(hass):
@@ -74,4 +76,4 @@ async def test_setup_entry_api_failure(hass):
         await hass.async_block_till_done()
 
     # Coordinator first-refresh failure → entry not fully loaded
-    assert entry.entry_id not in hass.data.get(DOMAIN, {})
+    assert entry.state is ConfigEntryState.SETUP_RETRY

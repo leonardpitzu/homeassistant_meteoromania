@@ -3,29 +3,34 @@ import re
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.const import MATCH_ALL
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.device_registry import DeviceInfo, DeviceEntryType
 
 from .const import (
-    DOMAIN,
-    COUNTY_KEYWORDS,
-    COUNTY_CODE,
     COD_COLOR,
-    NATIONWIDE_PATTERNS,
-    UNLOCALIZED_ZONE_MARKERS,
-    PHENOMENA_MAP,
-    MONTH_NUM,
     COLOR_EMOJI,
     COLOR_RGB,
+    COUNTY_CODE,
+    COUNTY_KEYWORDS,
+    DOMAIN,
+    MONTH_NUM,
+    NATIONWIDE_PATTERNS,
+    PHENOMENA_MAP,
+    UNLOCALIZED_ZONE_MARKERS,
 )
-from .coordinator import MeteoRomaniaDataUpdateCoordinator
+from .coordinator import MeteoRomaniaConfigEntry, MeteoRomaniaDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([MeteoRomaniaSensor(coordinator, entry.entry_id)])
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: MeteoRomaniaConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    async_add_entities([MeteoRomaniaSensor(entry.runtime_data, entry.entry_id)])
 
 
 class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):

@@ -1,6 +1,6 @@
 import logging
-from html import unescape
 import re
+from html import unescape
 from xml.etree.ElementTree import ParseError
 
 import aiohttp

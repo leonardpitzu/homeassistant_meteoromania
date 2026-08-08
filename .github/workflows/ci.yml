@@ -42,7 +42,7 @@ jobs:
       - name: Install test dependencies
         run: pip install -r requirements_test.txt
       - name: Run tests
-        run: pytest tests/ -v --cov=custom_components/meteo_romania_alerts --cov-report=term-missing
+        run: pytest tests/ -v --cov=custom_components/meteoromania --cov-report=term-missing
 
   hacs:
     name: HACS Validation

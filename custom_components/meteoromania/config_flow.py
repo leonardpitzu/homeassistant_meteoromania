@@ -2,7 +2,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 
-from .const import DOMAIN, CONF_COUNTY, COUNTY_KEYWORDS
+from .const import CONF_COUNTY, COUNTY_KEYWORDS, DOMAIN
 
 _COUNTY_OPTIONS = [{"value": "", "label": "— None (show all) —"}] + [
     {"value": c, "label": c} for c in sorted(COUNTY_KEYWORDS)

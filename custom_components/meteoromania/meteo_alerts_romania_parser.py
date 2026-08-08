@@ -16,7 +16,6 @@ Run it from this directory:
 import sys
 
 import requests
-
 from api import HEADERS, URL_XML, MeteoRomaniaApiClient
 
 

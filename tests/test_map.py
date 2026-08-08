@@ -7,7 +7,6 @@ import re
 import time
 from types import SimpleNamespace
 
-from custom_components.meteoromania.const import DOMAIN
 from custom_components.meteoromania.map import (
     _etag,
     _find_codes,
@@ -84,10 +83,18 @@ def test_url_fresh_false_on_garbage():
 
 
 class _Hass:
-    """Minimal stand-in exposing only the ``data`` dict apply_map_urls uses."""
+    """Minimal stand-in for the bits of hass the map helpers use."""
 
-    def __init__(self):
+    def __init__(self, entries=()):
         self.data = {}
+        self.config_entries = SimpleNamespace(
+            async_loaded_entries=lambda domain: list(entries)
+        )
+
+
+def _entry(data):
+    """A loaded config entry whose coordinator holds *data*."""
+    return SimpleNamespace(runtime_data=SimpleNamespace(data=data))
 
 
 def _sign_verbatim(monkeypatch, counter=None):
@@ -167,21 +174,13 @@ def test_apply_map_urls_forgets_colourings_that_are_gone(monkeypatch):
 def test_find_codes_resolves_the_colouring_named_in_the_url():
     """The view recolours from whichever alert currently carries that colouring."""
     county, zone = {"TL": 3}, {"BV_munte_1": 1}
-    hass = _Hass()
-    hass.data[DOMAIN] = {
-        "entry": SimpleNamespace(
-            data={"alert 1": {"county_codes": county, "zone_codes": zone}}
-        )
-    }
+    hass = _Hass([_entry({"alert 1": {"county_codes": county, "zone_codes": zone}})])
 
     assert _find_codes(hass, _etag(county, zone)) == (county, zone)
 
 
 def test_find_codes_returns_none_for_a_colouring_no_longer_present():
     """An expired URL must 404 rather than serve some other alert's map."""
-    hass = _Hass()
-    hass.data[DOMAIN] = {
-        "entry": SimpleNamespace(data={"alert 1": {"county_codes": {"TL": 3}}})
-    }
+    hass = _Hass([_entry({"alert 1": {"county_codes": {"TL": 3}}})])
 
     assert _find_codes(hass, _etag({"GL": 1}, {})) is None

@@ -1,23 +1,26 @@
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, CONF_COUNTY, PLATFORMS
-from .coordinator import MeteoRomaniaDataUpdateCoordinator
+from .const import CONF_COUNTY, DOMAIN, PLATFORMS
+from .coordinator import MeteoRomaniaConfigEntry, MeteoRomaniaDataUpdateCoordinator
 from .map import MeteoRomaniaMapView
 
+_MAP_VIEW_KEY = f"{DOMAIN}_map_view"
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: MeteoRomaniaConfigEntry
+) -> bool:
     """Set up MeteoRomania from a config entry."""
     coordinator = MeteoRomaniaDataUpdateCoordinator(hass, entry)
     coordinator.county = entry.options.get(CONF_COUNTY, "")
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    entry.runtime_data = coordinator
 
     # Register the local map endpoint once (serves recoloured warning maps).
-    if getattr(hass, "http", None) and not hass.data.get(f"{DOMAIN}_map_view"):
+    if getattr(hass, "http", None) and not hass.data.get(_MAP_VIEW_KEY):
         hass.http.register_view(MeteoRomaniaMapView())
-        hass.data[f"{DOMAIN}_map_view"] = True
+        hass.data[_MAP_VIEW_KEY] = True
 
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -25,18 +28,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_options_updated(
+    hass: HomeAssistant, entry: MeteoRomaniaConfigEntry
+) -> None:
     """Handle options update — refresh the county on the coordinator."""
-    coordinator: MeteoRomaniaDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     coordinator.county = entry.options.get(CONF_COUNTY, "")
     await coordinator.async_request_refresh()
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant, entry: MeteoRomaniaConfigEntry
+) -> bool:
     """Unload MeteoRomania entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

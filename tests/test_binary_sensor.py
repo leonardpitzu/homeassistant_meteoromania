@@ -6,9 +6,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.meteoromania.binary_sensor import (
     _build_local_alerts,
-    _format_local_summary,
     _compact_interval,
     _extract_phenomena_label,
+    _format_local_summary,
     _warning_relevant,
     strip_diacritics,
 )
@@ -364,6 +364,6 @@ async def test_internal_code_dicts_are_not_published(hass):
     # The Brașov filter still fired — which is the whole point of the codes.
     assert [a["color"] for a in attrs["local_alerts"]] == ["PORTOCALIU"]
     # And the coordinator still holds them, so the map endpoint can recolour.
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     assert coordinator.data["alert 1"]["county_codes"] == {"BV": 2, "TL": 0}
     assert coordinator.data["alert 1"]["zone_codes"] == {"BV_munte_1": 2}

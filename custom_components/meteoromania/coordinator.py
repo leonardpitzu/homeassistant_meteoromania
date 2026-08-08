@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -7,17 +8,23 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
 
-from .const import DOMAIN
 from .api import MeteoRomaniaApiClient
+from .const import DOMAIN
 from .map import apply_map_urls
 
 _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(hours=1)
 
+type MeteoRomaniaConfigEntry = ConfigEntry[MeteoRomaniaDataUpdateCoordinator]
 
-class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
+
+class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    config_entry: MeteoRomaniaConfigEntry
+
+    def __init__(
+        self, hass: HomeAssistant, config_entry: MeteoRomaniaConfigEntry
+    ) -> None:
         session = async_get_clientsession(hass)
         self.api = MeteoRomaniaApiClient(session)
         self.last_updated: str | None = None
@@ -31,7 +38,7 @@ class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=SCAN_INTERVAL,
         )
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> dict[str, Any]:
         try:
             data = await self.api.fetch_alerts()
         except Exception as err:

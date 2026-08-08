@@ -1,13 +1,13 @@
 """Tests for the MeteoRomania API client."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from custom_components.meteoromania.api import (
     MeteoRomaniaApiClient,
     MeteoRomaniaApiError,
 )
-
 
 # ---------------------------------------------------------------------------
 # Sample responses
@@ -166,7 +166,7 @@ SAMPLE_XML_LONE_INFORMARE = (
   <avertizare culoare="0" numeTipMesaj="x" intervalul="x"
     mesaj="INFORMARE METEOROLOGICĂ&lt;br&gt;Interval de valabilitate: 1 mai&lt;br&gt;Fenomene vizate: vreme calduroasa&lt;br&gt;detalii" />
 </avertizari>"""
-).encode("utf-8")
+).encode()
 
 
 async def test_lone_informare_has_no_warnings():
@@ -337,7 +337,7 @@ SAMPLE_XML_INFORMARE_WITH_WARNINGS = (
   <avertizare culoare="0" numeTipMesaj="x" intervalul="x"
     mesaj="INFORMARE METEOROLOGICĂ&lt;br&gt;Interval de valabilitate: 1 mai ora 10 – 2 mai ora 21&lt;br&gt;Fenomene vizate: vreme calduroasa&lt;br&gt;Zone afectate: toata tara&lt;br&gt;Nota: descriere generala&lt;br&gt;ATENȚIONARE METEOROLOGICĂ&lt;br&gt;COD GALBEN&lt;br&gt;Interval de valabilitate: 1 mai, intervalul orar 12 – 21&lt;br&gt;Fenomene vizate: temperaturi ridicate&lt;br&gt;Zone afectate: sud&lt;br&gt;detalii sud&lt;br&gt;COD PORTOCALIU&lt;br&gt;Interval de valabilitate: 1 mai, intervalul orar 14 – 20&lt;br&gt;Fenomene vizate: instabilitate atmosferica&lt;br&gt;Zone afectate: nord&lt;br&gt;detalii nord" />
 </avertizari>"""
-).encode("utf-8")
+).encode()
 
 
 async def test_informare_groups_atentionari_as_warnings():
@@ -381,7 +381,7 @@ SAMPLE_XML_WITH_JUDETE = (
     <zona cod="BV_depresiune" culoare="0" useCoordGis="true"/>
   </avertizare>
 </avertizari>"""
-).encode("utf-8")
+).encode()
 
 
 async def test_fetch_alerts_attaches_county_codes_from_judete():
