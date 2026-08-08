@@ -1,6 +1,7 @@
 import logging
 from datetime import timedelta
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -16,7 +17,7 @@ SCAN_INTERVAL = timedelta(hours=1)
 
 
 class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass: HomeAssistant):
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         session = async_get_clientsession(hass)
         self.api = MeteoRomaniaApiClient(session)
         self.last_updated: str | None = None
@@ -26,7 +27,7 @@ class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_method=self._async_update_data,
+            config_entry=config_entry,
             update_interval=SCAN_INTERVAL,
         )
 
@@ -35,8 +36,6 @@ class MeteoRomaniaDataUpdateCoordinator(DataUpdateCoordinator):
             data = await self.api.fetch_alerts()
         except Exception as err:
             raise UpdateFailed(f"Error fetching MeteoRomania data: {err}") from err
-        # Reuse still-fresh signed map URLs from the previous poll when the
-        # colouring is unchanged, so quiet weather does not churn recorded state.
-        apply_map_urls(self.hass, data, previous=self.data)
+        apply_map_urls(self.hass, data)
         self.last_updated = utcnow().isoformat()
         return data

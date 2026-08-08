@@ -35,17 +35,20 @@ from .const import DOMAIN, MAP_URL_BASE
 
 _LOGGER = logging.getLogger(__name__)
 
-# Signed map URLs are minted with a generous lifetime and reused across polls
-# for as long as the alert's colours are unchanged (see apply_map_urls), so a
-# stable weather situation does not churn the sensor's recorded attributes.
+# Signed map URLs are minted with a generous lifetime and reused for as long as
+# they are valid, so an unchanged colouring keeps the same URL across polls.
 MAP_URL_EXPIRY = timedelta(hours=25)
 # Re-sign once a reused URL drops within this margin of expiring.
 _MAP_URL_REFRESH_MARGIN = 3 * 3600  # 3 hours
-# How long a browser may cache a served map (the signed URL changes only when
-# the colouring does, so the content behind a given URL is immutable).
-_MAP_CACHE_SECONDS = 3600
+# The URL names the colouring it renders, so what it serves can never change.
+_MAP_CACHE_SECONDS = 86400
 
 _TEMPLATE_FILE = Path(__file__).parent / "map_template.svg.gz"
+_template_cache: str | None = None
+
+# Signed URLs already minted, keyed by colouring etag. Pruned each poll to the
+# colourings still in play, so it cannot grow without bound.
+_URL_CACHE_KEY = f"{DOMAIN}_map_urls"
 _template_cache: str | None = None
 
 # etag -> gzip-compressed SVG bytes. Keyed on the colour codes, so identical
@@ -127,87 +130,93 @@ def _url_fresh(url: str) -> bool:
     return exp - time.time() > _MAP_URL_REFRESH_MARGIN
 
 
-def apply_map_urls(hass: HomeAssistant, data: dict, previous: dict | None = None) -> None:
+def apply_map_urls(hass: HomeAssistant, data: dict) -> None:
     """Attach an HA-signed local map URL to each alert in *data* (in place).
 
-    The URL points at :class:`MeteoRomaniaMapView` (``MAP_URL_BASE/<index>``) and
-    is signed so a plain dashboard ``<img>`` can load it without a session while
-    the endpoint itself stays authenticated. To avoid churning the sensor's
-    recorded history, a still-fresh URL from the previous poll is reused as long
-    as that alert's colours are unchanged. Best-effort: if signing is
-    unavailable (e.g. the http component is not ready) the alert gets no URL.
+    The URL names the colouring it renders (``MAP_URL_BASE/<etag>``) rather than
+    the alert's position in this poll, so it cannot come to mean a different
+    alert when ANM reorders the feed — which, combined with browser caching,
+    used to be able to show one alert's map beside another's text. Because the
+    content behind a URL is then fixed, a still-valid URL is reused for as long
+    as it lasts and the response is cacheable for a day.
+
+    Signing is best-effort: if it is unavailable (e.g. the http component is not
+    ready) the alert simply gets no URL.
 
     ANM publishes a single map per alert, painted with every warning's colours
     at once; the same URL is repeated on each warning so a dashboard can show a
     map beside every one of them.
     """
-    previous = previous or {}
+    cache: dict[str, str] = hass.data.setdefault(_URL_CACHE_KEY, {})
+    live: set[str] = set()
+
     for key, alert in data.items():
         if not (key.startswith("alert ") and isinstance(alert, dict)):
             continue
-        prev = previous.get(key)
-        if (
-            isinstance(prev, dict)
-            and prev.get("url")
-            and prev.get("county_codes") == alert.get("county_codes")
-            and prev.get("zone_codes") == alert.get("zone_codes")
-            and _url_fresh(prev["url"])
-        ):
-            url = prev["url"]
-        else:
-            index = key.split(" ", 1)[1]
+        etag = _etag(alert.get("county_codes", {}), alert.get("zone_codes", {}))
+        url = cache.get(etag)
+        if url is None or not _url_fresh(url):
             try:
                 url = async_sign_path(
-                    hass, f"{MAP_URL_BASE}/{index}", MAP_URL_EXPIRY
+                    hass, f"{MAP_URL_BASE}/{etag}", MAP_URL_EXPIRY
                 )
             except Exception as err:  # noqa: BLE001 - signing is a best-effort UI aid
                 _LOGGER.debug("Could not sign map URL for %s: %s", key, err)
                 continue
+            cache[etag] = url
+        live.add(etag)
         alert["url"] = url
         for warning_key, warning in alert.items():
             if warning_key.startswith("warning ") and isinstance(warning, dict):
                 warning["url"] = url
 
+    for stale in cache.keys() - live:
+        del cache[stale]
 
-def _find_alert(hass: HomeAssistant, index: str) -> dict | None:
-    """Return the ``alert <index>`` dict from any MeteoRomania coordinator."""
+
+def _find_codes(hass: HomeAssistant, etag: str) -> tuple[dict, dict] | None:
+    """Return the ``(county_codes, zone_codes)`` an *etag* was minted from."""
     for coordinator in hass.data.get(DOMAIN, {}).values():
         data = getattr(coordinator, "data", None) or {}
-        alert = data.get(f"alert {index}")
-        if isinstance(alert, dict):
-            return alert
+        for key, alert in data.items():
+            if not (key.startswith("alert ") and isinstance(alert, dict)):
+                continue
+            county = alert.get("county_codes", {})
+            zone = alert.get("zone_codes", {})
+            if _etag(county, zone) == etag:
+                return county, zone
     return None
 
 
 class MeteoRomaniaMapView(HomeAssistantView):
-    """Serve the locally-recoloured ANM warning map for an alert.
+    """Serve the locally-recoloured ANM warning map for a colouring.
 
     Authenticated (a valid session or an HA-signed URL is required); the map
     URLs handed to the dashboard by :func:`apply_map_urls` are signed so plain
-    ``<img>`` tags can load them. Responses are gzipped and cacheable.
+    ``<img>`` tags can load them. Responses are gzipped and, because the URL
+    names the colouring it renders, safely cacheable.
     """
 
-    url = MAP_URL_BASE + "/{index}"
+    url = MAP_URL_BASE + "/{etag}"
     name = "api:meteoromania:map"
 
-    async def get(self, request: web.Request, index: str) -> web.Response:
+    async def get(self, request: web.Request, etag: str) -> web.Response:
         hass = request.app["hass"]
-        alert = _find_alert(hass, index)
-        if alert is None:
-            return web.Response(status=404, text="Unknown alert")
+        codes = _find_codes(hass, etag)
+        if codes is None:
+            return web.Response(status=404, text="Unknown map")
+        county_codes, zone_codes = codes
 
         # Off-load to the executor: the first render reads the gzipped template
         # from disk and every miss recolours + gzips a ~4.7MB SVG — both are
         # blocking/CPU-heavy and must not run in the event loop.
-        etag, gz = await hass.async_add_executor_job(
-            render_map_gz,
-            alert.get("county_codes", {}),
-            alert.get("zone_codes", {}),
+        rendered_etag, gz = await hass.async_add_executor_job(
+            render_map_gz, county_codes, zone_codes
         )
-        quoted_etag = f'"{etag}"'
+        quoted_etag = f'"{rendered_etag}"'
         cache_headers = {
             "ETag": quoted_etag,
-            "Cache-Control": f"private, max-age={_MAP_CACHE_SECONDS}",
+            "Cache-Control": f"private, max-age={_MAP_CACHE_SECONDS}, immutable",
         }
         if request.headers.get("If-None-Match") == quoted_etag:
             return web.Response(status=304, headers=cache_headers)

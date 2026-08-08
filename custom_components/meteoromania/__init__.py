@@ -8,7 +8,7 @@ from .map import MeteoRomaniaMapView
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MeteoRomania from a config entry."""
-    coordinator = MeteoRomaniaDataUpdateCoordinator(hass)
+    coordinator = MeteoRomaniaDataUpdateCoordinator(hass, entry)
     coordinator.county = entry.options.get(CONF_COUNTY, "")
     await coordinator.async_config_entry_first_refresh()
 

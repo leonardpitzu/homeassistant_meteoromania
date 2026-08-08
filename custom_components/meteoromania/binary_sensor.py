@@ -25,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([MeteoRomaniaSensor(coordinator, entry.entry_id)], update_before_add=True)
+    async_add_entities([MeteoRomaniaSensor(coordinator, entry.entry_id)])
 
 
 class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
@@ -60,13 +60,13 @@ class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
         if not data:
             attrs = {"last_updated": self.coordinator.last_updated}
         else:
+            county = self.coordinator.county
+            alerts_list = _build_local_alerts(data, county) if county else None
             attrs = {
-                **data,
+                **{key: _published(key, value) for key, value in data.items()},
                 "last_updated": self.coordinator.last_updated,
             }
-            county = self.coordinator.county
-            if county:
-                alerts_list = _build_local_alerts(data, county)
+            if alerts_list is not None:
                 attrs["local_alerts"] = alerts_list
                 attrs["local_summary"] = _format_local_summary(alerts_list)
 
@@ -85,8 +85,24 @@ class MeteoRomaniaSensor(CoordinatorEntity, BinarySensorEntity):
         )
 
 
-# ── Diacritics transliteration ─────────────────────────────────────────
+# ANM's per-county and per-relief code dicts drive the county filter and the map
+# renderer straight from coordinator.data; publishing them as well only inflates
+# every state update, so they are stripped on the way out.
+_INTERNAL_ALERT_KEYS = frozenset({"county_codes", "zone_codes"})
 
+
+def _published(key: str, value):
+    """Strip an alert's internal-only keys; pass anything else through.
+
+    Copies rather than deleting in place — these dicts belong to the coordinator
+    and the map endpoint still reads the codes from them.
+    """
+    if not (key.startswith("alert ") and isinstance(value, dict)):
+        return value
+    return {k: v for k, v in value.items() if k not in _INTERNAL_ALERT_KEYS}
+
+
+# ── Diacritics transliteration ─────────────────────────────────────────
 _RO_DIACRITICS = str.maketrans(
     "ăâîșțĂÂÎȘȚşţŞŢ",
     "aaistAAISTstST",

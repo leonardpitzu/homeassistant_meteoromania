@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MeteoRomania",
+        "description": "Această integrare creează un senzor binar care monitorizează avertizările meteorologice emise de Administrația Națională de Meteorologie (ANM).",
+        "data": {
+          "county": "Județ (pentru sumarul local)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Această integrare poate fi configurată o singură dată."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opțiuni MeteoRomania",
+        "data": {
+          "county": "Județ (pentru sumarul local)"
+        }
+      }
+    }
+  }
+}

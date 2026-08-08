@@ -26,8 +26,6 @@ The entity exposes **detailed attributes** for every active alert:
 | `alert N -> warning M -> phenomena` | Full description of weather phenomena (optional) |
 | `alert N -> warning M -> url` | Map URL of the parent alert, repeated so every warning can show one |
 | `alert N -> url` | HA-served, signed URL of the alert map, generated locally (see [Warning maps](#warning-maps)) |
-| `alert N -> county_codes` | ANM's authoritative per-county severity (`{county: 0-3}`, from the feed's `<judet>`) |
-| `alert N -> zone_codes` | ANM's per-relief/mountain severity (`{zone: 1-3}`, from the feed's `<zona>`) |
 | `local_alerts` | List of per-warning dicts with `icon`, `text`, `color`, `r`, `g`, `b` (only when a county is configured) |
 | `local_summary` | Concise, region-filtered summary string (only when a county is configured) |
 | `last_updated` | ISO timestamp of the most recent successful poll |
@@ -44,9 +42,14 @@ alert 1:
     interval: 22 februarie, ora 10:00 - 23 februarie, ora 06:00
     title: ninsori viscolite, strat de zăpadă
     phenomena: Se vor semnala ninsori abundente...
-    url: /api/meteoromania/map/1?authSig=...
-  url: /api/meteoromania/map/1?authSig=...
+    url: /api/meteoromania/map/8f14e45fceea167a?authSig=...
+  url: /api/meteoromania/map/8f14e45fceea167a?authSig=...
 ```
+
+> ANM's authoritative per-county (`<judet>`) and per-relief (`<zona>`) severity
+> codes are parsed from the same feed and drive both the county filter and the
+> map colouring, but they are used internally and are not published as
+> attributes.
 
 > Plain warnings (without a national *informare*) come through as
 > `type: ATENȚIONARE METEOROLOGICĂ` and omit the alert-level `interval`/`title`.
@@ -63,17 +66,19 @@ maps are **generated locally** — the integration ships the country outline
 authoritative `county_codes` / `zone_codes` in the same XML feed it already
 fetches. Nothing downloads ANM's multi-megabyte map per dashboard render.
 
-The maps are served by Home Assistant itself at `/api/meteoromania/map/<n>` and
+The maps are served by Home Assistant itself at `/api/meteoromania/map/<id>` and
 the `url` is **signed** (short-lived token), so a plain dashboard `<img>` can
 load it while the endpoint stays authenticated. Drop `url` into a Markdown or
 Picture card as-is.
 
 Responses are **gzip-compressed** (~4.7 MB SVG → ~120 KB on the wire), rendered
-once and cached per colouring, and browser-cacheable. The signed `url` is
-**reused across polls** while the alert's colours are unchanged, so quiet
-weather does not churn the sensor's recorded history. If you would rather keep
-the verbose alert attributes out of long-term history entirely, exclude the
-entity in your `recorder:` config.
+once and cached per colouring, and browser-cacheable. The `<id>` in the URL is a
+hash of the colouring it renders, not the alert's position in the feed, so the
+image behind a given URL never changes — a cached map cannot end up beside
+another alert's text when ANM reorders its messages. An unchanged colouring
+keeps the same signed URL across polls, so browsers keep their cache. If you
+would rather keep the verbose alert attributes out of long-term history
+entirely, exclude the entity in your `recorder:` config.
 
 ## Installation
 

@@ -12,7 +12,7 @@ from custom_components.meteoromania.binary_sensor import (
     _warning_relevant,
     strip_diacritics,
 )
-from custom_components.meteoromania.const import DOMAIN
+from custom_components.meteoromania.const import CONF_COUNTY, DOMAIN
 
 ENTITY_ID = "binary_sensor.meteoromania"
 
@@ -28,10 +28,27 @@ MOCK_ALERTS_ACTIVE = {
 
 MOCK_ALERTS_NONE = {"has_alerts": False, "alert_count": 0}
 
+# Carries ANM's authoritative per-county codes: Brașov orange, Tulcea clear.
+MOCK_ALERTS_LOCAL = {
+    "has_alerts": True,
+    "alert_count": 1,
+    "alert 1": {
+        "type": "ATENȚIONARE METEOROLOGICĂ",
+        "color_code": "PORTOCALIU",
+        "county_codes": {"BV": 2, "TL": 0},
+        "zone_codes": {"BV_munte_1": 2},
+        "warning 1": {
+            "color_code": "PORTOCALIU",
+            "interval": "8 august, ora 12:00 – 8 august, ora 21:00",
+            "title": "vijelii",
+        },
+    },
+}
 
-async def _setup(hass, alerts_data):
+
+async def _setup(hass, alerts_data, options=None):
     """Set up the integration with mocked alert data and return the entry."""
-    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=options or {})
     entry.add_to_hass(hass)
 
     with (
@@ -335,3 +352,18 @@ async def test_local_alerts_in_attributes(hass):
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+
+async def test_internal_code_dicts_are_not_published(hass):
+    """The county/relief codes drive filtering and the map, but are not broadcast."""
+    entry = await _setup(hass, MOCK_ALERTS_LOCAL, {CONF_COUNTY: "Brașov"})
+    attrs = hass.states.get(ENTITY_ID).attributes
+
+    assert "county_codes" not in attrs["alert 1"]
+    assert "zone_codes" not in attrs["alert 1"]
+    # The Brașov filter still fired — which is the whole point of the codes.
+    assert [a["color"] for a in attrs["local_alerts"]] == ["PORTOCALIU"]
+    # And the coordinator still holds them, so the map endpoint can recolour.
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    assert coordinator.data["alert 1"]["county_codes"] == {"BV": 2, "TL": 0}
+    assert coordinator.data["alert 1"]["zone_codes"] == {"BV_munte_1": 2}

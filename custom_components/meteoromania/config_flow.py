@@ -33,18 +33,15 @@ class MeteoRomaniaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return MeteoRomaniaOptionsFlow(config_entry)
+        return MeteoRomaniaOptionsFlow()
 
 
 class MeteoRomaniaOptionsFlow(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry):
-        self._config_entry = config_entry
-
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        current = self._config_entry.options.get(CONF_COUNTY, "")
+        current = self.config_entry.options.get(CONF_COUNTY, "")
         schema = vol.Schema({
             vol.Optional(CONF_COUNTY, default=current): vol.In(
                 {c["value"]: c["label"] for c in _COUNTY_OPTIONS}

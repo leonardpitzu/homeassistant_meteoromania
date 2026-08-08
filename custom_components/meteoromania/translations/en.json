@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MeteoRomania",
+        "description": "This integration will create a binary sensor that monitors weather alerts from MeteoRomania (ANM).",
+        "data": {
+          "county": "County (for local summary)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "This integration can only be configured once."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MeteoRomania Options",
+        "data": {
+          "county": "County (for local summary)"
+        }
+      }
+    }
+  }
+}
